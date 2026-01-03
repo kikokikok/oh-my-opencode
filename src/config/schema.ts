@@ -344,6 +344,45 @@ export const OpenSpecConfigSchema = z.object({
   rootDir: z.string().default(".opencode/openspec"),
 })
 
+export const MCPKnowledgeProviderConfigSchema = z.object({
+  name: z.string(),
+  searchTool: z.string(),
+  getTool: z.string().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+})
+
+export const KnowledgeProviderMergeStrategySchema = z.enum([
+  "score",
+  "round-robin",
+  "provider-priority",
+])
+
+export const KnowledgeProviderConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  providers: z.object({
+    local: z.object({
+      enabled: z.boolean().default(true),
+      rootDir: z.string().optional(),
+    }).optional(),
+    mem0: z.object({
+      enabled: z.boolean().default(true),
+      indexKnowledgeRepo: z.boolean().default(true),
+      searchLayers: z.array(MemoryLayerSchema).optional(),
+    }).optional(),
+    mcp: z.object({
+      enabled: z.boolean().default(true),
+      servers: z.array(MCPKnowledgeProviderConfigSchema).default([]),
+    }).optional(),
+  }).optional(),
+  search: z.object({
+    defaultLimit: z.number().min(1).max(100).default(10),
+    defaultThreshold: z.number().min(0).max(1).default(0.5),
+    mergeStrategy: KnowledgeProviderMergeStrategySchema.default("score"),
+    providerPriority: z.array(z.string()).optional(),
+    deduplicate: z.boolean().default(true),
+  }).optional(),
+})
+
 export const OhMyOpenCodeConfigSchema = z.object({
   $schema: z.string().optional(),
   disabled_mcps: z.array(McpNameSchema).optional(),
@@ -362,6 +401,7 @@ export const OhMyOpenCodeConfigSchema = z.object({
   ralph_loop: RalphLoopConfigSchema.optional(),
   mem0: Mem0ConfigSchema.optional(),
   knowledge_repo: KnowledgeRepoConfigSchema.optional(),
+  knowledge_provider: KnowledgeProviderConfigSchema.optional(),
   openspec: OpenSpecConfigSchema.optional(),
 })
 
@@ -386,5 +426,8 @@ export type OpenSpecConfig = z.infer<typeof OpenSpecConfigSchema>
 export type OpenSpecEnforcement = z.infer<typeof OpenSpecEnforcementSchema>
 export type OpenSpecChangeType = z.infer<typeof OpenSpecChangeTypeSchema>
 export type MemoryLayer = z.infer<typeof MemoryLayerSchema>
+export type KnowledgeProviderConfig = z.infer<typeof KnowledgeProviderConfigSchema>
+export type KnowledgeProviderMergeStrategy = z.infer<typeof KnowledgeProviderMergeStrategySchema>
+export type MCPKnowledgeProviderConfig = z.infer<typeof MCPKnowledgeProviderConfigSchema>
 
 export { McpNameSchema, type McpName } from "../mcp/types"
