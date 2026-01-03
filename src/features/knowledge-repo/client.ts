@@ -17,7 +17,9 @@ import type {
   Constraint,
   Severity,
   KnowledgeMetadata,
+  MergedManifest,
 } from "./types"
+import { KnowledgeSyncManager } from "./sync"
 
 const MANIFEST_VERSION = "1.0.0"
 const MAX_SUMMARY_LENGTH = 100
@@ -27,19 +29,28 @@ export class KnowledgeRepository {
   private commitsDir: string
   private manifestPath: string
   private promotionsDir: string
+  private syncManager: KnowledgeSyncManager | null = null
 
   constructor(config: KnowledgeRepositoryConfig) {
     this.config = config
     this.commitsDir = join(config.rootDir, "commits")
     this.manifestPath = join(config.rootDir, "manifest.json")
     this.promotionsDir = join(config.rootDir, "promotions")
+
+    if (config.centralHub) {
+      this.syncManager = new KnowledgeSyncManager(
+        config.centralHub,
+        config.orgId,
+        config.teamId
+      )
+    }
   }
 
   async initialize(): Promise<void> {
     await mkdir(this.commitsDir, { recursive: true })
     await mkdir(this.promotionsDir, { recursive: true })
 
-    const layerDirs = ["company", "org", "project"] as const
+    const layerDirs = ["company", "org", "team", "project"] as const
     for (const layer of layerDirs) {
       await mkdir(join(this.commitsDir, layer), { recursive: true })
     }
@@ -48,6 +59,10 @@ export class KnowledgeRepository {
       await stat(this.manifestPath)
     } catch {
       await this.rebuildManifest()
+    }
+
+    if (this.syncManager) {
+      await this.syncManager.initialize()
     }
   }
 
@@ -107,7 +122,7 @@ export class KnowledgeRepository {
   }
 
   async getCommitById(id: string): Promise<KnowledgeCommit | null> {
-    const layers: KnowledgeLayer[] = ["project", "org", "company"]
+    const layers: KnowledgeLayer[] = ["project", "team", "org", "company"]
     for (const layer of layers) {
       const commit = await this.getCommit(layer, id)
       if (commit) return commit
@@ -121,7 +136,7 @@ export class KnowledgeRepository {
 
     const layers = filter.layer
       ? this.normalizeFilter(filter.layer)
-      : (["company", "org", "project"] as KnowledgeLayer[])
+      : (["company", "org", "team", "project"] as KnowledgeLayer[])
     for (const layer of layers) {
       allEntries = allEntries.concat(manifest.entries[layer])
     }
@@ -182,7 +197,7 @@ export class KnowledgeRepository {
 
   async rebuildManifest(): Promise<KnowledgeManifest> {
     const manifest = this.createEmptyManifest()
-    const layers: KnowledgeLayer[] = ["company", "org", "project"]
+    const layers: KnowledgeLayer[] = ["company", "org", "team", "project"]
 
     for (const layer of layers) {
       const layerDir = join(this.commitsDir, layer)
@@ -215,7 +230,7 @@ export class KnowledgeRepository {
       throw new Error(`Knowledge not found: ${request.knowledgeId}`)
     }
 
-    const layerOrder: KnowledgeLayer[] = ["project", "org", "company"]
+    const layerOrder: KnowledgeLayer[] = ["project", "team", "org", "company"]
     const currentIndex = layerOrder.indexOf(commit.layer)
     const targetIndex = layerOrder.indexOf(request.targetLayer)
 
@@ -269,6 +284,7 @@ export class KnowledgeRepository {
     const byLayer: Record<KnowledgeLayer, number> = {
       company: manifest.entries.company.length,
       org: manifest.entries.org.length,
+      team: manifest.entries.team.length,
       project: manifest.entries.project.length,
     }
 
@@ -292,10 +308,12 @@ export class KnowledgeRepository {
   async getMergedKnowledge(layer: KnowledgeLayer): Promise<KnowledgeCommit[]> {
     const layers: KnowledgeLayer[] =
       layer === "project"
-        ? ["company", "org", "project"]
-        : layer === "org"
-          ? ["company", "org"]
-          : ["company"]
+        ? ["company", "org", "team", "project"]
+        : layer === "team"
+          ? ["company", "org", "team"]
+          : layer === "org"
+            ? ["company", "org"]
+            : ["company"]
 
     const result = await this.query({
       layer: layers,
@@ -303,6 +321,51 @@ export class KnowledgeRepository {
     })
 
     return result.items
+  }
+
+  async getMergedManifestWithSync(autoSync = true): Promise<MergedManifest> {
+    const localManifest = await this.getManifest()
+
+    if (!this.syncManager) {
+      return this.createMergedManifestFromLocal(localManifest)
+    }
+
+    if (autoSync) {
+      const isStale = await this.syncManager.isSyncStale()
+      if (isStale && this.config.centralHub?.autoSync) {
+        await this.syncManager.syncFromCentral()
+      }
+    }
+
+    return this.syncManager.getMergedManifest(localManifest)
+  }
+
+  async syncFromCentral(): Promise<{ success: boolean; error?: string }> {
+    if (!this.syncManager) {
+      return { success: false, error: "No central hub configured" }
+    }
+    return this.syncManager.syncFromCentral()
+  }
+
+  async isSyncStale(): Promise<boolean> {
+    if (!this.syncManager) return false
+    return this.syncManager.isSyncStale()
+  }
+
+  private createMergedManifestFromLocal(local: KnowledgeManifest): MergedManifest {
+    return {
+      ...local,
+      sources: {
+        company: "local",
+        org: "local",
+        team: "local",
+        project: "local",
+      },
+      appliedFilters: {
+        orgId: this.config.orgId,
+        teamId: this.config.teamId,
+      },
+    }
   }
 
   private getCommitPath(layer: KnowledgeLayer, id: string): string {
@@ -347,6 +410,7 @@ export class KnowledgeRepository {
       entries: {
         company: [],
         org: [],
+        team: [],
         project: [],
       },
       stats: {

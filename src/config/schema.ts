@@ -101,6 +101,10 @@ export const HookNameSchema = z.enum([
   "claude-code-hooks",
   "auto-slash-command",
   "edit-error-recovery",
+  "knowledge-monitor",
+  "memory-rehydration",
+  "openspec-continuity",
+  "openspec-commitment",
 ])
 
 export const BuiltinCommandNameSchema = z.enum([
@@ -271,6 +275,75 @@ export const RalphLoopConfigSchema = z.object({
   state_dir: z.string().optional(),
 })
 
+export const MemoryLayerSchema = z.enum([
+  "user",
+  "session",
+  "project",
+  "team",
+  "org",
+  "company",
+  "agent",
+])
+
+export const Mem0ConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  apiKey: z.string().optional(),
+  endpoint: z.string().url().optional(),
+  userId: z.string().optional(),
+  sessionId: z.string().optional(),
+  projectId: z.string().optional(),
+  teamId: z.string().optional(),
+  orgId: z.string().optional(),
+  companyId: z.string().optional(),
+  agentId: z.string().optional(),
+  autoRehydrate: z.boolean().default(true),
+  rehydrateLayers: z.array(MemoryLayerSchema).default(["user", "project", "team"]),
+})
+
+export const CentralHubConfigSchema = z.object({
+  url: z.string().url(),
+  branch: z.string().default("main"),
+  autoSync: z.boolean().default(true),
+  syncIntervalMinutes: z.number().min(5).max(1440).default(60),
+})
+
+export const KnowledgeRepoConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  rootDir: z.string().default(".opencode/knowledge"),
+  autoLoadPolicies: z.boolean().default(true),
+  orgId: z.string().optional(),
+  teamId: z.string().optional(),
+  projectId: z.string().optional(),
+  centralHub: CentralHubConfigSchema.optional(),
+  cache: z.object({
+    memory: z.boolean().default(true),
+    disk: z.boolean().default(false),
+    ttlSeconds: z.number().min(60).max(86400).default(3600),
+  }).optional(),
+})
+
+export const OpenSpecEnforcementSchema = z.enum(["off", "soft", "hard"])
+
+export const OpenSpecChangeTypeSchema = z.enum([
+  "new_feature",
+  "enhancement",
+  "bug_fix",
+  "refactoring",
+  "breaking_change",
+  "documentation",
+  "infrastructure",
+])
+
+export const OpenSpecConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  enforcement: OpenSpecEnforcementSchema.default("soft"),
+  requireSpecFor: z.array(OpenSpecChangeTypeSchema).default([
+    "new_feature",
+    "breaking_change",
+  ]),
+  rootDir: z.string().default(".opencode/openspec"),
+})
+
 export const OhMyOpenCodeConfigSchema = z.object({
   $schema: z.string().optional(),
   disabled_mcps: z.array(McpNameSchema).optional(),
@@ -287,6 +360,9 @@ export const OhMyOpenCodeConfigSchema = z.object({
   auto_update: z.boolean().optional(),
   skills: SkillsConfigSchema.optional(),
   ralph_loop: RalphLoopConfigSchema.optional(),
+  mem0: Mem0ConfigSchema.optional(),
+  knowledge_repo: KnowledgeRepoConfigSchema.optional(),
+  openspec: OpenSpecConfigSchema.optional(),
 })
 
 export type OhMyOpenCodeConfig = z.infer<typeof OhMyOpenCodeConfigSchema>
@@ -303,5 +379,12 @@ export type DynamicContextPruningConfig = z.infer<typeof DynamicContextPruningCo
 export type SkillsConfig = z.infer<typeof SkillsConfigSchema>
 export type SkillDefinition = z.infer<typeof SkillDefinitionSchema>
 export type RalphLoopConfig = z.infer<typeof RalphLoopConfigSchema>
+export type Mem0Config = z.infer<typeof Mem0ConfigSchema>
+export type CentralHubConfig = z.infer<typeof CentralHubConfigSchema>
+export type KnowledgeRepoConfig = z.infer<typeof KnowledgeRepoConfigSchema>
+export type OpenSpecConfig = z.infer<typeof OpenSpecConfigSchema>
+export type OpenSpecEnforcement = z.infer<typeof OpenSpecEnforcementSchema>
+export type OpenSpecChangeType = z.infer<typeof OpenSpecChangeTypeSchema>
+export type MemoryLayer = z.infer<typeof MemoryLayerSchema>
 
 export { McpNameSchema, type McpName } from "../mcp/types"

@@ -1,4 +1,5 @@
 import color from "picocolors"
+import { getPackageName } from "../../shared"
 
 export const SYMBOLS = {
   check: color.green("\u2713"),
@@ -67,6 +68,6 @@ export const EXIT_CODES = {
 
 export const MIN_OPENCODE_VERSION = "1.0.150"
 
-export const PACKAGE_NAME = "oh-my-opencode"
+export const PACKAGE_NAME = getPackageName()
 
 export const OPENCODE_BINARIES = ["opencode", "opencode-desktop"] as const

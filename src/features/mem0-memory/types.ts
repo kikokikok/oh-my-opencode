@@ -2,8 +2,10 @@ export type MemoryLayer =
   | "user"
   | "session"
   | "project"
+  | "team"
   | "org"
   | "company"
+  | "agent"
 
 export interface Memory {
   id: string
@@ -47,9 +49,14 @@ export interface Mem0Config {
   apiKey?: string
   endpoint?: string
   userId?: string
+  sessionId?: string
   projectId?: string
+  teamId?: string
   orgId?: string
   companyId?: string
+  agentId?: string
+  autoRehydrate?: boolean
+  rehydrateLayers?: MemoryLayer[]
 }
 
 export interface MemoryStats {

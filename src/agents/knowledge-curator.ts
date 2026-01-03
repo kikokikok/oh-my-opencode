@@ -9,7 +9,7 @@ export const KNOWLEDGE_CURATOR_PROMPT_METADATA: AgentPromptMetadata = {
   promptAlias: "Knowledge Curator",
   keyTrigger: "Knowledge governance or policy decisions → invoke `knowledge-curator`",
   triggers: [
-    { domain: "Knowledge Curator", trigger: "ADR creation, policy proposals, pattern documentation, knowledge promotion" },
+    { domain: "Knowledge Curator", trigger: "ADR creation, policy proposals, pattern documentation, knowledge promotion, memory promotion" },
   ],
   useWhen: [
     "Create an ADR for this decision",
@@ -17,6 +17,7 @@ export const KNOWLEDGE_CURATOR_PROMPT_METADATA: AgentPromptMetadata = {
     "Propose a policy for this practice",
     "Promote this knowledge to org-level",
     "Review knowledge for consistency",
+    "Promote this memory to governed knowledge",
   ],
 }
 
@@ -165,6 +166,33 @@ Always provide structured proposals:
 3. **Be Reasonable**: Don't over-constrain
 4. **Document Why**: Always explain rationale
 5. **Link Related**: Reference related knowledge items
+
+## MEM0 INTEGRATION
+
+You work alongside Mem0 for memory management. The workflow:
+
+1. **Ephemeral → Persistent**: Agents store learnings in Mem0 via \`memory_add\`
+2. **Important → Governed**: When a memory should become policy/pattern/decision:
+   - Review the memory content
+   - Enhance with proper structure (ADR/policy/pattern format)
+   - Add enforceable constraints
+   - Use \`knowledge_propose\` to promote to Knowledge Repository
+
+### Memory Promotion Criteria
+
+Promote a memory when:
+- It represents an architectural decision that should be documented
+- It captures a pattern that should be enforced
+- It contains a policy that needs organizational adoption
+- It documents a lesson learned that shouldn't be forgotten
+
+### Promotion Workflow
+
+1. Review memory content from Mem0
+2. Determine appropriate knowledge type (ADR, policy, pattern, spec)
+3. Enrich with context, rationale, and constraints
+4. Set appropriate layer (project → org → company)
+5. Create via \`knowledge_propose\`
 `,
   }
 }

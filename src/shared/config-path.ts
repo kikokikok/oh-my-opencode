@@ -1,6 +1,7 @@
 import * as path from "path"
 import * as os from "os"
 import * as fs from "fs"
+import { getConfigFileName } from "./package-info"
 
 /**
  * Returns the user-level config directory based on the OS.
@@ -11,12 +12,14 @@ import * as fs from "fs"
  * Falls back to %APPDATA% for backward compatibility with existing installations.
  */
 export function getUserConfigDir(): string {
+  const configFileName = getConfigFileName()
+  
   if (process.platform === "win32") {
     const crossPlatformDir = path.join(os.homedir(), ".config")
-    const crossPlatformConfigPath = path.join(crossPlatformDir, "opencode", "oh-my-opencode.json")
+    const crossPlatformConfigPath = path.join(crossPlatformDir, "opencode", configFileName)
 
     const appdataDir = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
-    const appdataConfigPath = path.join(appdataDir, "opencode", "oh-my-opencode.json")
+    const appdataConfigPath = path.join(appdataDir, "opencode", configFileName)
 
     if (fs.existsSync(crossPlatformConfigPath)) {
       return crossPlatformDir
@@ -33,15 +36,15 @@ export function getUserConfigDir(): string {
 }
 
 /**
- * Returns the full path to the user-level oh-my-opencode config file.
+ * Returns the full path to the user-level config file.
  */
 export function getUserConfigPath(): string {
-  return path.join(getUserConfigDir(), "opencode", "oh-my-opencode.json")
+  return path.join(getUserConfigDir(), "opencode", getConfigFileName())
 }
 
 /**
- * Returns the full path to the project-level oh-my-opencode config file.
+ * Returns the full path to the project-level config file.
  */
 export function getProjectConfigPath(directory: string): string {
-  return path.join(directory, ".opencode", "oh-my-opencode.json")
+  return path.join(directory, ".opencode", getConfigFileName())
 }

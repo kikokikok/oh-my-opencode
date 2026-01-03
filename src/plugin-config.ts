@@ -9,6 +9,7 @@ import {
   parseJsonc,
   detectConfigFile,
   migrateConfigFile,
+  getPackageName,
 } from "./shared";
 
 export function loadConfigFromPath(
@@ -93,11 +94,13 @@ export function loadPluginConfig(
   directory: string,
   ctx: unknown
 ): OhMyOpenCodeConfig {
+  const packageName = getPackageName()
+  
   // User-level config path (OS-specific) - prefer .jsonc over .json
   const userBasePath = path.join(
     getUserConfigDir(),
     "opencode",
-    "oh-my-opencode"
+    packageName
   );
   const userDetected = detectConfigFile(userBasePath);
   const userConfigPath =
@@ -106,7 +109,7 @@ export function loadPluginConfig(
       : userBasePath + ".json";
 
   // Project-level config path - prefer .jsonc over .json
-  const projectBasePath = path.join(directory, ".opencode", "oh-my-opencode");
+  const projectBasePath = path.join(directory, ".opencode", packageName);
   const projectDetected = detectConfigFile(projectBasePath);
   const projectConfigPath =
     projectDetected.format !== "none"

@@ -26,6 +26,8 @@ import {
   createRalphLoopHook,
   createAutoSlashCommandHook,
   createEditErrorRecoveryHook,
+  createOpenSpecContinuityHook,
+  createOpenSpecCommitmentHook,
 } from "./hooks";
 import { createGoogleAntigravityAuthPlugin } from "./auth/antigravity";
 import {
@@ -52,6 +54,10 @@ import {
   interactive_bash,
   getTmuxPath,
 } from "./tools";
+import { createMemoryTools } from "./tools/memory";
+import { Mem0Adapter } from "./features/mem0-memory/adapter";
+import { createKnowledgeMonitorHook } from "./hooks/knowledge-monitor";
+import { createMemoryRehydrationHook } from "./hooks/memory-rehydration";
 import { BackgroundManager } from "./features/background-agent";
 import { SkillMcpManager } from "./features/skill-mcp-manager";
 import { type HookName } from "./config";
@@ -66,6 +72,42 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
   const isHookEnabled = (hookName: HookName) => !disabledHooks.has(hookName);
 
   const modelCacheState = createModelCacheState();
+
+  const mem0Adapter = pluginConfig.mem0?.enabled
+    ? new Mem0Adapter({
+        enabled: true,
+        apiKey: pluginConfig.mem0.apiKey,
+        endpoint: pluginConfig.mem0.endpoint,
+        userId: pluginConfig.mem0.userId,
+        sessionId: pluginConfig.mem0.sessionId,
+        projectId: pluginConfig.mem0.projectId,
+        teamId: pluginConfig.mem0.teamId,
+        orgId: pluginConfig.mem0.orgId,
+        companyId: pluginConfig.mem0.companyId,
+        agentId: pluginConfig.mem0.agentId,
+      })
+    : null;
+
+  const memoryTools = mem0Adapter ? createMemoryTools(mem0Adapter) : {};
+
+  const knowledgeMonitor =
+    isHookEnabled("knowledge-monitor") && pluginConfig.knowledge_repo?.enabled
+      ? createKnowledgeMonitorHook(ctx.directory, {
+          enabled: true,
+          checkPreTool: true,
+          checkPostTool: false,
+        })
+      : null;
+
+  const memoryRehydration =
+    isHookEnabled("memory-rehydration") &&
+    mem0Adapter &&
+    pluginConfig.mem0?.autoRehydrate !== false
+      ? createMemoryRehydrationHook(mem0Adapter, {
+          enabled: true,
+          layers: pluginConfig.mem0?.rehydrateLayers,
+        })
+      : null;
 
   const contextWindowMonitor = isHookEnabled("context-window-monitor")
     ? createContextWindowMonitorHook(ctx)
@@ -161,6 +203,22 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     ? createEditErrorRecoveryHook(ctx)
     : null;
 
+  const openspecContinuity =
+    isHookEnabled("openspec-continuity") && pluginConfig.openspec?.enabled
+      ? createOpenSpecContinuityHook(ctx)
+      : null;
+
+  const openspecCommitment =
+    isHookEnabled("openspec-commitment") && pluginConfig.openspec?.enabled
+      ? createOpenSpecCommitmentHook(ctx, {
+          enforcement: pluginConfig.openspec.enforcement ?? "soft",
+          requireSpecFor: pluginConfig.openspec.requireSpecFor ?? [
+            "new_feature",
+            "breaking_change",
+          ],
+        })
+      : null;
+
   const backgroundManager = new BackgroundManager(ctx);
 
   const todoContinuationEnforcer = isHookEnabled("todo-continuation-enforcer")
@@ -233,6 +291,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     tool: {
       ...builtinTools,
       ...backgroundTools,
+      ...memoryTools,
       call_omo_agent: callOmoAgent,
       look_at: lookAt,
       skill: skillTool,
@@ -244,6 +303,62 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await claudeCodeHooks["chat.message"]?.(input, output);
       await keywordDetector?.["chat.message"]?.(input, output);
       await autoSlashCommand?.["chat.message"]?.(input, output);
+
+      // OpenSpec hooks - inject context on session start
+      if (openspecContinuity?.UserPromptSubmit) {
+        const parts = (
+          output as { parts?: Array<{ type: string; text?: string }> }
+        ).parts;
+        const promptText =
+          parts
+            ?.filter((p) => p.type === "text" && p.text)
+            .map((p) => p.text)
+            .join("\n")
+            .trim() || "";
+
+        const result = await openspecContinuity.UserPromptSubmit({
+          sessionID: input.sessionID,
+          prompt: promptText,
+        });
+
+        if (result.messages && result.messages.length > 0) {
+          const idx = parts?.findIndex((p) => p.type === "text" && p.text);
+          if (parts && idx !== undefined && idx >= 0) {
+            const contextText = result.messages.map((m) => m.content).join("\n\n");
+            parts[idx].text = `${contextText}\n\n${parts[idx].text ?? ""}`;
+          }
+        }
+      }
+
+      // OpenSpec commitment - check for implementation intent
+      if (openspecCommitment?.UserPromptSubmit) {
+        const parts = (
+          output as { parts?: Array<{ type: string; text?: string }> }
+        ).parts;
+        const promptText =
+          parts
+            ?.filter((p) => p.type === "text" && p.text)
+            .map((p) => p.text)
+            .join("\n")
+            .trim() || "";
+
+        const result = await openspecCommitment.UserPromptSubmit({
+          sessionID: input.sessionID,
+          prompt: promptText,
+        });
+
+        if (result.blocked) {
+          throw new Error(result.message ?? "OpenSpec commitment check blocked this action");
+        }
+
+        if (result.messages && result.messages.length > 0) {
+          const idx = parts?.findIndex((p) => p.type === "text" && p.text);
+          if (parts && idx !== undefined && idx >= 0) {
+            const reminderText = result.messages.map((m) => m.content).join("\n\n");
+            parts[idx].text = `${reminderText}\n\n${parts[idx].text ?? ""}`;
+          }
+        }
+      }
 
       if (ralphLoop) {
         const parts = (
@@ -331,6 +446,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await agentUsageReminder?.event(input);
       await interactiveBashSession?.event(input);
       await ralphLoop?.event(input);
+      await memoryRehydration?.event(input);
 
       const { event } = input;
       const props = event.properties as Record<string, unknown> | undefined;
@@ -388,6 +504,17 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await directoryAgentsInjector?.["tool.execute.before"]?.(input, output);
       await directoryReadmeInjector?.["tool.execute.before"]?.(input, output);
       await rulesInjector?.["tool.execute.before"]?.(input, output);
+      await knowledgeMonitor?.hooks["tool.execute.before"]?.(input, output);
+
+      if (openspecCommitment?.PreToolUse) {
+        const commitmentResult = await openspecCommitment.PreToolUse({
+          tool: input.tool,
+          sessionID: input.sessionID || "",
+        });
+        if (commitmentResult?.blocked) {
+          throw new Error(commitmentResult.message ?? "OpenSpec commitment blocked this tool");
+        }
+      }
 
       if (input.tool === "task") {
         const args = output.args as Record<string, unknown>;
@@ -446,6 +573,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await agentUsageReminder?.["tool.execute.after"](input, output);
       await interactiveBashSession?.["tool.execute.after"](input, output);
       await editErrorRecovery?.["tool.execute.after"](input, output);
+      await knowledgeMonitor?.hooks["tool.execute.after"]?.(input, output);
     },
   };
 };

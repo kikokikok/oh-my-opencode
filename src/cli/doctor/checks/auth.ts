@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import type { CheckResult, CheckDefinition, AuthProviderInfo, AuthProviderId } from "../types"
-import { CHECK_IDS, CHECK_NAMES } from "../constants"
+import { CHECK_IDS, CHECK_NAMES, PACKAGE_NAME } from "../constants"
 import { parseJsonc } from "../../../shared"
 
 const OPENCODE_CONFIG_DIR = join(homedir(), ".config", "opencode")
@@ -59,7 +59,7 @@ export async function checkAuthProvider(providerId: AuthProviderId): Promise<Che
       message: "Auth plugin not installed",
       details: [
         `Plugin: ${AUTH_PLUGINS[providerId].plugin}`,
-        "Run: bunx oh-my-opencode install",
+        `Run: bunx ${PACKAGE_NAME} install`,
       ],
     }
   }

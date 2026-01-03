@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs"
+import { homedir } from "node:os"
 import { join } from "node:path"
+import { parseJsonc, getPackageName, getConfigFileName, getSchemaFileName } from "../shared"
 import {
   parseJsonc,
   getOpenCodeConfigPaths,
@@ -7,6 +9,15 @@ import {
   type OpenCodeConfigPaths,
 } from "../shared"
 import type { ConfigMergeResult, DetectedConfig, InstallConfig } from "./types"
+
+const OPENCODE_CONFIG_DIR = join(homedir(), ".config", "opencode")
+const OPENCODE_JSON = join(OPENCODE_CONFIG_DIR, "opencode.json")
+const OPENCODE_JSONC = join(OPENCODE_CONFIG_DIR, "opencode.jsonc")
+const OPENCODE_PACKAGE_JSON = join(OPENCODE_CONFIG_DIR, "package.json")
+
+function getOmoConfigPath(): string {
+  return join(OPENCODE_CONFIG_DIR, getConfigFileName())
+}
 
 const OPENCODE_BINARIES = ["opencode", "opencode-desktop"] as const
 
@@ -189,7 +200,7 @@ export function addPluginToOpenCodeConfig(): ConfigMergeResult {
   }
 
   const { format, path } = detectConfigFormat()
-  const pluginName = "oh-my-opencode"
+  const pluginName = getPackageName()
 
   try {
     if (format === "none") {
@@ -265,8 +276,13 @@ function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial
 }
 
 export function generateOmoConfig(installConfig: InstallConfig): Record<string, unknown> {
+  const packageName = getPackageName()
+  const schemaFileName = getSchemaFileName()
+  // Schema URL can be overridden via OMOPENCODE_SCHEMA_URL env var for forks
+  const schemaUrl = process.env.OMOPENCODE_SCHEMA_URL ??
+    `https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/${schemaFileName}`
   const config: Record<string, unknown> = {
-    $schema: "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
+    $schema: schemaUrl,
   }
 
   if (installConfig.hasGemini) {
@@ -314,6 +330,7 @@ export function generateOmoConfig(installConfig: InstallConfig): Record<string, 
 }
 
 export function writeOmoConfig(installConfig: InstallConfig): ConfigMergeResult {
+  const omoConfigPath = getOmoConfigPath()
   try {
     ensureConfigDir()
   } catch (err) {
@@ -357,7 +374,7 @@ export function writeOmoConfig(installConfig: InstallConfig): ConfigMergeResult 
 
     return { success: true, configPath: omoConfigPath }
   } catch (err) {
-    return { success: false, configPath: omoConfigPath, error: formatErrorWithSuggestion(err, "write oh-my-opencode config") }
+    return { success: false, configPath: omoConfigPath, error: formatErrorWithSuggestion(err, `write ${getPackageName()} config`) }
   }
 }
 
@@ -666,7 +683,8 @@ export function detectCurrentConfig(): DetectedConfig {
 
   const openCodeConfig = parseResult.config
   const plugins = openCodeConfig.plugin ?? []
-  result.isInstalled = plugins.some((p) => p.startsWith("oh-my-opencode"))
+  const packageName = getPackageName()
+  result.isInstalled = plugins.some((p) => p.startsWith(packageName))
 
   if (!result.isInstalled) {
     return result

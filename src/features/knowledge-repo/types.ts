@@ -12,8 +12,9 @@
 /**
  * Hierarchical layers for knowledge organization.
  * Lower layers inherit from and can override higher layers.
+ * Precedence (highest to lowest): project > team > org > company
  */
-export type KnowledgeLayer = "company" | "org" | "project"
+export type KnowledgeLayer = "company" | "org" | "team" | "project"
 
 /**
  * Severity levels for policy enforcement.
@@ -266,6 +267,7 @@ export interface KnowledgeManifest {
   entries: {
     company: ManifestEntry[]
     org: ManifestEntry[]
+    team: ManifestEntry[]
     project: ManifestEntry[]
   }
   /** Aggregate statistics */
@@ -361,8 +363,12 @@ export interface KnowledgeRepositoryConfig {
   rootDir: string
   /** Organization identifier */
   orgId?: string
+  /** Team identifier for filtering */
+  teamId?: string
   /** Project identifier */
   projectId?: string
+  /** Central hub configuration for multi-tenant federation */
+  centralHub?: CentralHubConfig
   /** Cache configuration */
   cache?: {
     /** Enable memory caching */
@@ -389,4 +395,59 @@ export interface RepositoryStats {
   byType: Record<KnowledgeType, number>
   bySeverity: Record<Severity, number>
   lastUpdated: string
+}
+
+// =============================================================================
+// Multi-Tenant Types
+// =============================================================================
+
+/**
+ * Configuration for the central knowledge hub.
+ * Supports git-based federation with automatic sync.
+ */
+export interface CentralHubConfig {
+  /** Git repository URL for the central hub */
+  url: string
+  /** Branch to sync from (default: main) */
+  branch: string
+  /** Enable automatic sync on session start */
+  autoSync: boolean
+  /** Interval in minutes between background syncs (5-1440) */
+  syncIntervalMinutes: number
+}
+
+/**
+ * Tracks synchronization state with the central hub.
+ * Stored at ~/.opencode/knowledge-cache/sync-state.json
+ */
+export interface SyncState {
+  /** ISO 8601 timestamp of last successful sync */
+  lastSyncAt: string | null
+  /** Git commit SHA of last synced state */
+  lastCommitSha: string | null
+  /** ETag for HTTP caching (if applicable) */
+  etag: string | null
+  /** Whether a sync is currently in progress */
+  syncInProgress: boolean
+  /** Error message from last failed sync attempt */
+  lastError: string | null
+}
+
+/**
+ * Result of merging project and central hub manifests.
+ * Applies layer precedence and org/team filtering.
+ */
+export interface MergedManifest extends KnowledgeManifest {
+  /** Source of each layer's entries */
+  sources: {
+    company: "central" | "local" | "merged"
+    org: "central" | "local" | "merged"
+    team: "central" | "local" | "merged"
+    project: "local"
+  }
+  /** Filters applied during merge */
+  appliedFilters: {
+    orgId?: string
+    teamId?: string
+  }
 }

@@ -6,6 +6,7 @@ import {
   isLocalDevMode,
   findPluginEntry,
 } from "../../../hooks/auto-update-checker/checker"
+import { getPackageName } from "../../../shared"
 
 function compareVersions(current: string, latest: string): boolean {
   const parseVersion = (v: string): number[] => {
@@ -88,11 +89,12 @@ export async function checkVersionStatus(): Promise<CheckResult> {
   }
 
   if (!info.currentVersion) {
+    const packageName = getPackageName()
     return {
       name: CHECK_NAMES[CHECK_IDS.VERSION_STATUS],
       status: "warn",
       message: "Unable to determine current version",
-      details: ["Run: bunx oh-my-opencode get-local-version"],
+      details: [`Run: bunx ${packageName} get-local-version`],
     }
   }
 
@@ -106,11 +108,12 @@ export async function checkVersionStatus(): Promise<CheckResult> {
   }
 
   if (!info.isUpToDate) {
+    const packageName = getPackageName()
     return {
       name: CHECK_NAMES[CHECK_IDS.VERSION_STATUS],
       status: "warn",
       message: `Update available: ${info.currentVersion} -> ${info.latestVersion}`,
-      details: ["Run: cd ~/.config/opencode && bun update oh-my-opencode"],
+      details: [`Run: cd ~/.config/opencode && bun update ${packageName}`],
     }
   }
 

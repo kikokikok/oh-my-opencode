@@ -1,10 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
-import { mkdir, rm, readFile } from "fs/promises"
+import { mkdir, rm, readFile, writeFile } from "fs/promises"
 import { join } from "path"
 import { tmpdir } from "os"
 import { randomUUID } from "crypto"
 import { KnowledgeRepository } from "./client"
 import { KnowledgeCache } from "./cache"
+import { KnowledgeSyncManager, CACHE_DIR, CENTRAL_CACHE_DIR } from "./sync"
 import {
   ConflictDetector,
   groupViolationsBySeverity,
@@ -15,6 +16,8 @@ import type {
   KnowledgeCommit,
   Constraint,
   ConstraintViolation,
+  KnowledgeManifest,
+  CentralHubConfig,
 } from "./types"
 
 const createTestDir = () => join(tmpdir(), `knowledge-repo-test-${randomUUID()}`)
@@ -556,5 +559,310 @@ describe("utility functions", () => {
     ]
 
     expect(hasBlockingViolations(violations)).toBe(false)
+  })
+})
+
+describe("KnowledgeRepository Multi-Tenant", () => {
+  let testDir: string
+  let repo: KnowledgeRepository
+
+  beforeEach(async () => {
+    testDir = createTestDir()
+    repo = new KnowledgeRepository({
+      rootDir: testDir,
+      orgId: "test-org",
+      teamId: "test-team",
+    })
+    await repo.initialize()
+  })
+
+  afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true })
+  })
+
+  describe("team layer support", () => {
+    test("creates commit in team layer", async () => {
+      const commit = await repo.createCommit({
+        type: "policy",
+        title: "Team Policy",
+        content: "Team specific policy",
+        layer: "team",
+        severity: "warn",
+        author: testAuthor,
+      })
+
+      expect(commit.layer).toBe("team")
+
+      const retrieved = await repo.getCommit("team", commit.id)
+      expect(retrieved).not.toBeNull()
+      expect(retrieved?.title).toBe("Team Policy")
+    })
+
+    test("queries team layer", async () => {
+      await repo.createCommit({
+        type: "policy",
+        title: "Team Policy",
+        content: "Content",
+        layer: "team",
+        severity: "info",
+        author: testAuthor,
+      })
+
+      const result = await repo.query({ layer: "team" })
+
+      expect(result.items.length).toBe(1)
+      expect(result.items[0].layer).toBe("team")
+    })
+
+    test("promotes from project to team", async () => {
+      const original = await repo.createCommit({
+        type: "policy",
+        title: "Good Policy",
+        content: "Content",
+        layer: "project",
+        severity: "warn",
+        author: testAuthor,
+      })
+
+      const record = await repo.promote({
+        knowledgeId: original.id,
+        targetLayer: "team",
+        justification: "Useful for the team",
+        promoter: testAuthor,
+      })
+
+      expect(record.fromLayer).toBe("project")
+      expect(record.toLayer).toBe("team")
+    })
+
+    test("promotes from team to org", async () => {
+      const original = await repo.createCommit({
+        type: "policy",
+        title: "Team Policy",
+        content: "Content",
+        layer: "team",
+        severity: "warn",
+        author: testAuthor,
+      })
+
+      const record = await repo.promote({
+        knowledgeId: original.id,
+        targetLayer: "org",
+        justification: "Useful for the org",
+        promoter: testAuthor,
+      })
+
+      expect(record.fromLayer).toBe("team")
+      expect(record.toLayer).toBe("org")
+    })
+  })
+
+  describe("getMergedKnowledge with team layer", () => {
+    test("includes team layer for project scope", async () => {
+      await repo.createCommit({
+        type: "policy",
+        title: "Company Policy",
+        content: "Company level",
+        layer: "company",
+        severity: "info",
+        author: testAuthor,
+      })
+
+      await repo.createCommit({
+        type: "policy",
+        title: "Org Policy",
+        content: "Org level",
+        layer: "org",
+        severity: "info",
+        author: testAuthor,
+      })
+
+      await repo.createCommit({
+        type: "policy",
+        title: "Team Policy",
+        content: "Team level",
+        layer: "team",
+        severity: "info",
+        author: testAuthor,
+      })
+
+      await repo.createCommit({
+        type: "policy",
+        title: "Project Policy",
+        content: "Project level",
+        layer: "project",
+        severity: "info",
+        author: testAuthor,
+      })
+
+      const merged = await repo.getMergedKnowledge("project")
+      expect(merged.length).toBe(4)
+    })
+
+    test("includes only company, org, team for team scope", async () => {
+      await repo.createCommit({
+        type: "policy",
+        title: "Company Policy",
+        content: "Company level",
+        layer: "company",
+        severity: "info",
+        author: testAuthor,
+      })
+
+      await repo.createCommit({
+        type: "policy",
+        title: "Team Policy",
+        content: "Team level",
+        layer: "team",
+        severity: "info",
+        author: testAuthor,
+      })
+
+      await repo.createCommit({
+        type: "policy",
+        title: "Project Policy",
+        content: "Project level",
+        layer: "project",
+        severity: "info",
+        author: testAuthor,
+      })
+
+      const merged = await repo.getMergedKnowledge("team")
+      expect(merged.length).toBe(2)
+      expect(merged.every((c) => c.layer !== "project")).toBe(true)
+    })
+  })
+
+  describe("getStats with team layer", () => {
+    test("includes team layer in stats", async () => {
+      await repo.createCommit({
+        type: "policy",
+        title: "Team Policy",
+        content: "Content",
+        layer: "team",
+        severity: "info",
+        author: testAuthor,
+      })
+
+      const stats = await repo.getStats()
+      expect(stats.byLayer.team).toBe(1)
+    })
+  })
+
+  describe("getMergedManifestWithSync without central hub", () => {
+    test("returns local manifest when no central hub configured", async () => {
+      await repo.createCommit({
+        type: "policy",
+        title: "Local Policy",
+        content: "Content",
+        layer: "project",
+        severity: "info",
+        author: testAuthor,
+      })
+
+      const merged = await repo.getMergedManifestWithSync()
+
+      expect(merged.sources.project).toBe("local")
+      expect(merged.sources.team).toBe("local")
+      expect(merged.sources.org).toBe("local")
+      expect(merged.sources.company).toBe("local")
+      expect(merged.appliedFilters.orgId).toBe("test-org")
+      expect(merged.appliedFilters.teamId).toBe("test-team")
+    })
+  })
+})
+
+describe("KnowledgeSyncManager", () => {
+  let syncManager: KnowledgeSyncManager
+  const testHubConfig: CentralHubConfig = {
+    url: "https://github.com/test/knowledge-hub.git",
+    branch: "main",
+    autoSync: true,
+    syncIntervalMinutes: 60,
+  }
+
+  beforeEach(async () => {
+    syncManager = new KnowledgeSyncManager(testHubConfig, "test-org", "test-team")
+  })
+
+  afterEach(async () => {
+    try {
+      await rm(CACHE_DIR, { recursive: true, force: true })
+    } catch {
+      /* intentionally empty */
+    }
+  })
+
+  describe("getSyncState", () => {
+    test("returns empty state when not initialized", async () => {
+      const state = await syncManager.getSyncState()
+
+      expect(state.lastSyncAt).toBeNull()
+      expect(state.lastCommitSha).toBeNull()
+      expect(state.syncInProgress).toBe(false)
+    })
+
+    test("returns saved state after initialization", async () => {
+      await syncManager.initialize()
+      const state = await syncManager.getSyncState()
+
+      expect(state).toBeDefined()
+      expect(state.syncInProgress).toBe(false)
+    })
+  })
+
+  describe("isSyncStale", () => {
+    test("returns true when never synced", async () => {
+      await syncManager.initialize()
+      const isStale = await syncManager.isSyncStale()
+
+      expect(isStale).toBe(true)
+    })
+  })
+
+  describe("getMergedManifest", () => {
+    test("returns local manifest when no central available", async () => {
+      await syncManager.initialize()
+
+      const localManifest: KnowledgeManifest = {
+        version: "1.0.0",
+        generatedAt: new Date().toISOString(),
+        totalCount: 1,
+        entries: {
+          company: [],
+          org: [],
+          team: [],
+          project: [{
+            id: "local-1",
+            type: "policy",
+            layer: "project",
+            summary: "Local policy",
+            severity: "info",
+            keywords: [],
+          }],
+        },
+        stats: {
+          byType: { policy: 1, adr: 0, pattern: 0, spec: 0 },
+          bySeverity: { info: 1, warn: 0, block: 0 },
+        },
+      }
+
+      const merged = await syncManager.getMergedManifest(localManifest)
+
+      expect(merged.entries.project.length).toBe(1)
+      expect(merged.sources.project).toBe("local")
+      expect(merged.appliedFilters.orgId).toBe("test-org")
+      expect(merged.appliedFilters.teamId).toBe("test-team")
+    })
+  })
+
+  describe("clearCache", () => {
+    test("clears cache and resets sync state", async () => {
+      await syncManager.initialize()
+      await syncManager.clearCache()
+
+      const state = await syncManager.getSyncState()
+      expect(state.lastSyncAt).toBeNull()
+    })
   })
 })

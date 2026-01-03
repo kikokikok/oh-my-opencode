@@ -152,8 +152,10 @@ export class Mem0Adapter {
       user: 0,
       session: 0,
       project: 0,
+      team: 0,
       org: 0,
       company: 0,
+      agent: 0,
     }
 
     for (const memory of memories) {
@@ -205,13 +207,17 @@ export class Mem0Adapter {
       case "user":
         return this.config.userId ?? "default-user"
       case "session":
-        return `session-${this.config.userId ?? "default"}`
+        return this.config.sessionId ?? `session-${this.config.userId ?? "default"}`
       case "project":
         return this.config.projectId ?? "default-project"
+      case "team":
+        return this.config.teamId ?? "default-team"
       case "org":
         return this.config.orgId ?? "default-org"
       case "company":
         return this.config.companyId ?? "default-company"
+      case "agent":
+        return this.config.agentId ?? "default-agent"
     }
   }
 
@@ -221,7 +227,7 @@ export class Mem0Adapter {
   }
 
   private getAllLayers(): MemoryLayer[] {
-    return ["user", "session", "project", "org", "company"]
+    return ["user", "session", "project", "team", "org", "company", "agent"]
   }
 
   private parseMemory(data: unknown, layer: MemoryLayer): Memory {

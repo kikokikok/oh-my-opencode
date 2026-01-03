@@ -26,3 +26,6 @@ export { createRalphLoopHook, type RalphLoopHook } from "./ralph-loop";
 export { createAutoSlashCommandHook } from "./auto-slash-command";
 export { createEditErrorRecoveryHook } from "./edit-error-recovery";
 export { createKnowledgeMonitorHook, type KnowledgeMonitorHook, type KnowledgeMonitorConfig } from "./knowledge-monitor";
+export { createMemoryRehydrationHook, type MemoryRehydrationHook, type MemoryRehydrationConfig } from "./memory-rehydration";
+export { createOpenSpecContinuityHook } from "./openspec-continuity";
+export { createOpenSpecCommitmentHook } from "./openspec-commitment";

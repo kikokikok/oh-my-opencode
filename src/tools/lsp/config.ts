@@ -3,6 +3,7 @@ import { join } from "path"
 import { homedir } from "os"
 import { BUILTIN_SERVERS, EXT_TO_LANG, LSP_INSTALL_HINTS } from "./constants"
 import type { ResolvedServer, ServerLookupResult } from "./types"
+import { getConfigFileName } from "../../shared/package-info"
 
 interface LspEntry {
   disabled?: boolean
@@ -34,9 +35,10 @@ function loadJsonFile<T>(path: string): T | null {
 
 function getConfigPaths(): { project: string; user: string; opencode: string } {
   const cwd = process.cwd()
+  const configFileName = getConfigFileName()
   return {
-    project: join(cwd, ".opencode", "oh-my-opencode.json"),
-    user: join(homedir(), ".config", "opencode", "oh-my-opencode.json"),
+    project: join(cwd, ".opencode", configFileName),
+    user: join(homedir(), ".config", "opencode", configFileName),
     opencode: join(homedir(), ".config", "opencode", "opencode.json"),
   }
 }

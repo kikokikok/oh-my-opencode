@@ -1,10 +1,9 @@
-// Shared logging utility for the plugin
-
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
+import { getLogFileName } from "./package-info"
 
-const logFile = path.join(os.tmpdir(), "oh-my-opencode.log")
+const logFile = path.join(os.tmpdir(), getLogFileName())
 
 export function log(message: string, data?: unknown): void {
   try {
