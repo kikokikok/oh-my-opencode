@@ -9,35 +9,54 @@ interface PackageJson {
 
 let cachedPackageInfo: PackageJson | null = null
 
+function isValidPackageJson(obj: unknown): obj is PackageJson {
+  return (
+    typeof obj === "object" &&
+    obj !== null &&
+    typeof (obj as PackageJson).name === "string" &&
+    (obj as PackageJson).name.length > 0
+  )
+}
+
 function loadPackageJson(): PackageJson {
   if (cachedPackageInfo) {
     return cachedPackageInfo
   }
 
+  const fallback: PackageJson = { name: "oh-my-opencode", version: "0.0.0" }
+
   try {
     const currentDir = dirname(fileURLToPath(import.meta.url))
     
-    // Try multiple possible locations (dist vs src)
+    // Try multiple possible locations:
+    // - dist/index.js (bundled flat) -> ../package.json
+    // - dist/shared/ (if not bundled) -> ../../package.json
+    // - src/shared/ (development) -> ../../package.json
     const possiblePaths = [
-      join(currentDir, "..", "..", "package.json"),      // from dist/shared/
-      join(currentDir, "..", "..", "..", "package.json"), // from src/shared/
+      join(currentDir, "..", "package.json"),           // from dist/ (bundled)
+      join(currentDir, "..", "..", "package.json"),     // from dist/shared/ or src/shared/
+      join(currentDir, "..", "..", "..", "package.json"), // deeper nesting
     ]
 
     for (const pkgPath of possiblePaths) {
       try {
         const content = readFileSync(pkgPath, "utf-8")
-        cachedPackageInfo = JSON.parse(content)
-        return cachedPackageInfo!
+        const parsed = JSON.parse(content)
+        // Validate that this is actually our package.json with a valid name
+        if (isValidPackageJson(parsed)) {
+          cachedPackageInfo = parsed
+          return cachedPackageInfo
+        }
       } catch {
         continue
       }
     }
 
-    // Fallback if package.json not found
-    cachedPackageInfo = { name: "oh-my-opencode", version: "0.0.0" }
+    // Fallback if no valid package.json found
+    cachedPackageInfo = fallback
     return cachedPackageInfo
   } catch {
-    cachedPackageInfo = { name: "oh-my-opencode", version: "0.0.0" }
+    cachedPackageInfo = fallback
     return cachedPackageInfo
   }
 }
