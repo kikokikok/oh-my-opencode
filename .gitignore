@@ -26,6 +26,7 @@ yarn.lock
 # Environment
 .env
 .env.local
+.npmrc
 test-injection/
 notepad.md
 oauth-success.html
