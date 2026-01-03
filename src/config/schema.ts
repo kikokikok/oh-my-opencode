@@ -351,6 +351,11 @@ export const MCPKnowledgeProviderConfigSchema = z.object({
   config: z.record(z.string(), z.unknown()).optional(),
 })
 
+export const NotebookLMProviderConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  defaultNotebookId: z.string().optional(),
+})
+
 export const KnowledgeProviderMergeStrategySchema = z.enum([
   "score",
   "round-robin",
@@ -373,6 +378,7 @@ export const KnowledgeProviderConfigSchema = z.object({
       enabled: z.boolean().default(true),
       servers: z.array(MCPKnowledgeProviderConfigSchema).default([]),
     }).optional(),
+    notebooklm: NotebookLMProviderConfigSchema.optional(),
   }).optional(),
   search: z.object({
     defaultLimit: z.number().min(1).max(100).default(10),
@@ -429,5 +435,6 @@ export type MemoryLayer = z.infer<typeof MemoryLayerSchema>
 export type KnowledgeProviderConfig = z.infer<typeof KnowledgeProviderConfigSchema>
 export type KnowledgeProviderMergeStrategy = z.infer<typeof KnowledgeProviderMergeStrategySchema>
 export type MCPKnowledgeProviderConfig = z.infer<typeof MCPKnowledgeProviderConfigSchema>
+export type NotebookLMProviderConfig = z.infer<typeof NotebookLMProviderConfigSchema>
 
 export { McpNameSchema, type McpName } from "../mcp/types"
