@@ -3297,6 +3297,146 @@
         }
       }
     },
+    "knowledge_provider": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "providers": {
+          "type": "object",
+          "properties": {
+            "local": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "rootDir": {
+                  "type": "string"
+                }
+              }
+            },
+            "mem0": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "indexKnowledgeRepo": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "searchLayers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "session",
+                      "project",
+                      "team",
+                      "org",
+                      "company",
+                      "agent"
+                    ]
+                  }
+                }
+              }
+            },
+            "mcp": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "servers": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "searchTool": {
+                        "type": "string"
+                      },
+                      "getTool": {
+                        "type": "string"
+                      },
+                      "config": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "searchTool"
+                    ]
+                  }
+                }
+              }
+            },
+            "notebooklm": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "defaultNotebookId": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "search": {
+          "type": "object",
+          "properties": {
+            "defaultLimit": {
+              "default": 10,
+              "type": "number",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "defaultThreshold": {
+              "default": 0.5,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "mergeStrategy": {
+              "default": "score",
+              "type": "string",
+              "enum": [
+                "score",
+                "round-robin",
+                "provider-priority"
+              ]
+            },
+            "providerPriority": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "deduplicate": {
+              "default": true,
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
     "openspec": {
       "type": "object",
       "properties": {

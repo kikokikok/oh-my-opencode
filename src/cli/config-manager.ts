@@ -1,9 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { parseJsonc, getPackageName, getConfigFileName, getSchemaFileName } from "../shared"
 import {
   parseJsonc,
+  getPackageName,
+  getConfigFileName,
+  getSchemaFileName,
   getOpenCodeConfigPaths,
   type OpenCodeBinaryType,
   type OpenCodeConfigPaths,
@@ -336,8 +338,6 @@ export function writeOmoConfig(installConfig: InstallConfig): ConfigMergeResult 
   } catch (err) {
     return { success: false, configPath: getConfigDir(), error: formatErrorWithSuggestion(err, "create config directory") }
   }
-
-  const omoConfigPath = getOmoConfig()
 
   try {
     const newConfig = generateOmoConfig(installConfig)
