@@ -291,6 +291,26 @@ export function generateOmoConfig(installConfig: InstallConfig): Record<string, 
     config.google_auth = false
   }
 
+  if (installConfig.memoryProvider === "mem0-cloud" || installConfig.memoryProvider === "mem0-local") {
+    config.mem0 = {
+      enabled: true,
+      userId: "default-user",
+      autoRehydrate: true,
+      rehydrateLayers: ["user", "project"],
+      ...(installConfig.memoryProvider === "mem0-local" && installConfig.memoryEndpoint
+        ? { endpoint: installConfig.memoryEndpoint }
+        : {}),
+    }
+  } else if (installConfig.memoryProvider === "letta") {
+    config.letta = {
+      enabled: true,
+      endpoint: installConfig.memoryEndpoint ?? "http://localhost:8283",
+      userId: "default-user",
+      autoRehydrate: true,
+      rehydrateLayers: ["user", "project"],
+    }
+  }
+
   const agents: Record<string, Record<string, unknown>> = {}
 
   if (!installConfig.hasClaude) {
@@ -660,6 +680,8 @@ export function addProviderConfig(config: InstallConfig): ConfigMergeResult {
 interface OmoConfigData {
   google_auth?: boolean
   agents?: Record<string, { model?: string }>
+  mem0?: { enabled?: boolean; endpoint?: string }
+  letta?: { enabled?: boolean; endpoint?: string }
 }
 
 export function detectCurrentConfig(): DetectedConfig {
@@ -669,6 +691,7 @@ export function detectCurrentConfig(): DetectedConfig {
     isMax20: true,
     hasChatGPT: true,
     hasGemini: false,
+    memoryProvider: "no",
   }
 
   const { format, path } = detectConfigFormat()
@@ -732,6 +755,14 @@ export function detectCurrentConfig(): DetectedConfig {
 
     if (omoConfig.google_auth === false) {
       result.hasGemini = plugins.some((p) => p.startsWith("opencode-antigravity-auth"))
+    }
+
+    if (omoConfig.letta?.enabled === true) {
+      result.memoryProvider = "letta"
+      result.memoryEndpoint = omoConfig.letta.endpoint
+    } else if (omoConfig.mem0?.enabled === true) {
+      result.memoryProvider = omoConfig.mem0.endpoint ? "mem0-local" : "mem0-cloud"
+      result.memoryEndpoint = omoConfig.mem0.endpoint
     }
   } catch {
     /* intentionally empty - malformed omo config returns defaults from opencode config detection */

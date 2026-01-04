@@ -1,6 +1,6 @@
 import * as p from "@clack/prompts"
 import color from "picocolors"
-import type { InstallArgs, InstallConfig, ClaudeSubscription, BooleanArg, DetectedConfig } from "./types"
+import type { InstallArgs, InstallConfig, ClaudeSubscription, BooleanArg, DetectedConfig, MemoryProvider } from "./types"
 import {
   addPluginToOpenCodeConfig,
   writeOmoConfig,
@@ -40,6 +40,12 @@ function formatConfigSummary(config: InstallConfig): string {
   lines.push(formatProvider("Claude", config.hasClaude, claudeDetail))
   lines.push(formatProvider("ChatGPT", config.hasChatGPT))
   lines.push(formatProvider("Gemini", config.hasGemini))
+  
+  const memoryLabel = config.memoryProvider === "no" ? "Memory" : 
+    config.memoryProvider === "mem0-cloud" ? "Memory (Mem0 Cloud)" :
+    config.memoryProvider === "mem0-local" ? "Memory (Mem0 Self-hosted)" :
+    "Memory (Letta)"
+  lines.push(formatProvider(memoryLabel, config.memoryProvider !== "no"))
 
   lines.push("")
   lines.push(color.dim("─".repeat(40)))
@@ -132,6 +138,10 @@ function validateNonTuiArgs(args: InstallArgs): { valid: boolean; errors: string
     errors.push(`Invalid --gemini value: ${args.gemini} (expected: no, yes)`)
   }
 
+  if (args.memory !== undefined && !["no", "mem0-cloud", "mem0-local", "letta"].includes(args.memory)) {
+    errors.push(`Invalid --memory value: ${args.memory} (expected: no, mem0-cloud, mem0-local, letta)`)
+  }
+
   return { valid: errors.length === 0, errors }
 }
 
@@ -141,10 +151,14 @@ function argsToConfig(args: InstallArgs): InstallConfig {
     isMax20: args.claude === "max20",
     hasChatGPT: args.chatgpt === "yes",
     hasGemini: args.gemini === "yes",
+    memoryProvider: args.memory ?? "no",
+    memoryEndpoint: (args.memory === "mem0-local" || args.memory === "letta") 
+      ? (args.memoryEndpoint ?? (args.memory === "letta" ? "http://localhost:8283" : "http://localhost:8000/v1")) 
+      : undefined,
   }
 }
 
-function detectedToInitialValues(detected: DetectedConfig): { claude: ClaudeSubscription; chatgpt: BooleanArg; gemini: BooleanArg } {
+function detectedToInitialValues(detected: DetectedConfig): { claude: ClaudeSubscription; chatgpt: BooleanArg; gemini: BooleanArg; memory: MemoryProvider } {
   let claude: ClaudeSubscription = "no"
   if (detected.hasClaude) {
     claude = detected.isMax20 ? "max20" : "yes"
@@ -154,6 +168,7 @@ function detectedToInitialValues(detected: DetectedConfig): { claude: ClaudeSubs
     claude,
     chatgpt: detected.hasChatGPT ? "yes" : "no",
     gemini: detected.hasGemini ? "yes" : "no",
+    memory: detected.memoryProvider,
   }
 }
 
@@ -203,11 +218,58 @@ async function runTuiMode(detected: DetectedConfig): Promise<InstallConfig | nul
     return null
   }
 
+  const memory = await p.select({
+    message: "Enable persistent memory for agent context?",
+    options: [
+      { value: "no" as const, label: "No", hint: "Skip memory integration" },
+      { value: "mem0-cloud" as const, label: "Mem0 Cloud (mem0.ai)", hint: "Requires MEM0_API_KEY env variable" },
+      { value: "mem0-local" as const, label: "Mem0 Self-hosted", hint: "Uses custom Mem0 endpoint" },
+      { value: "letta" as const, label: "Letta", hint: "Self-hosted Letta server (port 8283)" },
+    ],
+    initialValue: initial.memory,
+  })
+
+  if (p.isCancel(memory)) {
+    p.cancel("Installation cancelled.")
+    return null
+  }
+
+  let memoryEndpoint: string | undefined
+  if (memory === "mem0-local") {
+    const endpoint = await p.text({
+      message: "Enter Mem0 endpoint URL:",
+      placeholder: "http://localhost:8000/v1",
+      defaultValue: "http://localhost:8000/v1",
+    })
+
+    if (p.isCancel(endpoint)) {
+      p.cancel("Installation cancelled.")
+      return null
+    }
+
+    memoryEndpoint = endpoint || "http://localhost:8000/v1"
+  } else if (memory === "letta") {
+    const endpoint = await p.text({
+      message: "Enter Letta server URL:",
+      placeholder: "http://localhost:8283",
+      defaultValue: "http://localhost:8283",
+    })
+
+    if (p.isCancel(endpoint)) {
+      p.cancel("Installation cancelled.")
+      return null
+    }
+
+    memoryEndpoint = endpoint || "http://localhost:8283"
+  }
+
   return {
     hasClaude: claude !== "no",
     isMax20: claude === "max20",
     hasChatGPT: chatgpt === "yes",
     hasGemini: gemini === "yes",
+    memoryProvider: memory,
+    memoryEndpoint,
   }
 }
 

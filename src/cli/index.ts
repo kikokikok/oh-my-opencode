@@ -26,17 +26,28 @@ program
   .option("--claude <value>", "Claude subscription: no, yes, max20")
   .option("--chatgpt <value>", "ChatGPT subscription: no, yes")
   .option("--gemini <value>", "Gemini integration: no, yes")
+  .option("--memory <value>", "Memory provider: no, mem0-cloud, mem0-local, letta (default: no)")
+  .option("--memory-endpoint <url>", "Memory endpoint for self-hosted providers")
   .option("--skip-auth", "Skip authentication setup hints")
   .addHelpText("after", `
 Examples:
   $ bunx oh-my-opencode install
   $ bunx oh-my-opencode install --no-tui --claude=max20 --chatgpt=yes --gemini=yes
   $ bunx oh-my-opencode install --no-tui --claude=no --chatgpt=no --gemini=no
+  $ bunx oh-my-opencode install --no-tui --claude=yes --chatgpt=yes --gemini=yes --memory=mem0-cloud
+  $ bunx oh-my-opencode install --no-tui --claude=yes --chatgpt=no --gemini=no --memory=mem0-local --memory-endpoint=http://localhost:8000/v1
+  $ bunx oh-my-opencode install --no-tui --claude=yes --chatgpt=yes --gemini=yes --memory=letta --memory-endpoint=http://localhost:8283
 
 Model Providers:
   Claude      Required for Sisyphus (main orchestrator) and Librarian agents
   ChatGPT     Powers the Oracle agent for debugging and architecture
   Gemini      Powers frontend, documentation, and multimodal agents
+
+Memory Providers:
+  mem0-cloud  Mem0 Cloud (mem0.ai) - requires MEM0_API_KEY env var
+  mem0-local  Self-hosted Mem0 - requires --memory-endpoint (default: http://localhost:8000/v1)
+  letta       Self-hosted Letta server - requires --memory-endpoint (default: http://localhost:8283)
+              See: https://docs.letta.com/guides/selfhosting/
 `)
   .action(async (options) => {
     const args: InstallArgs = {
@@ -44,6 +55,8 @@ Model Providers:
       claude: options.claude,
       chatgpt: options.chatgpt,
       gemini: options.gemini,
+      memory: options.memory,
+      memoryEndpoint: options.memoryEndpoint,
       skipAuth: options.skipAuth ?? false,
     }
     const exitCode = await install(args)
