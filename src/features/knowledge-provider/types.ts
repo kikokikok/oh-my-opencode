@@ -300,16 +300,47 @@ export interface Mem0ProviderConfig {
 }
 
 /**
+ * Transport type for MCP connections.
+ * - stdio: Spawns a local process and communicates via stdin/stdout (default)
+ * - sse: Connects to an HTTP/SSE endpoint (for servers like Dust CLI that run as HTTP servers)
+ */
+export type MCPTransportType = "stdio" | "sse"
+
+/**
  * Configuration for an MCP knowledge provider.
  */
 export interface MCPProviderConfig {
-  /** MCP server name (from .mcp.json) */
+  /** MCP server name (unique identifier) */
   name: string
+
+  /**
+   * Transport type for connecting to the MCP server.
+   * - "stdio" (default): Spawn a local process
+   * - "sse": Connect to an HTTP/SSE endpoint
+   */
+  transport?: MCPTransportType
+
+  // === Stdio transport options (when transport is "stdio" or undefined) ===
+
+  /** Command to start the MCP server (e.g., 'npx'). Required for stdio transport. */
+  command?: string
+  /** Arguments for the command */
+  args?: string[]
+  /** Environment variables for the MCP process */
+  env?: Record<string, string>
+
+  // === SSE transport options (when transport is "sse") ===
+
+  /** URL for SSE transport (e.g., 'http://localhost:60062/sse'). Required for sse transport. */
+  url?: string
+
+  // === Common options ===
+
   /** Tool name for search operations */
   searchTool: string
   /** Tool name for get-by-id operations */
   getTool?: string
-  /** Additional config for the MCP */
+  /** Additional config passed to MCP tools */
   config?: Record<string, unknown>
 }
 

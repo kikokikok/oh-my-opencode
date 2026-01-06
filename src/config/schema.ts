@@ -344,11 +344,18 @@ export const OpenSpecConfigSchema = z.object({
   rootDir: z.string().default(".opencode/openspec"),
 })
 
+export const MCPTransportTypeSchema = z.enum(["stdio", "sse"])
+
 export const MCPKnowledgeProviderConfigSchema = z.object({
   name: z.string(),
-  searchTool: z.string(),
-  getTool: z.string().optional(),
-  config: z.record(z.string(), z.unknown()).optional(),
+  transport: MCPTransportTypeSchema.optional().describe("Transport type: 'stdio' (default) or 'sse'"),
+  command: z.string().optional().describe("Command to start the MCP server (required for stdio transport)"),
+  args: z.array(z.string()).optional().describe("Arguments for the command (stdio transport)"),
+  env: z.record(z.string(), z.string()).optional().describe("Environment variables (stdio transport)"),
+  url: z.string().optional().describe("SSE endpoint URL (required for sse transport, e.g., 'http://localhost:60062/sse')"),
+  searchTool: z.string().describe("MCP tool name for search operations"),
+  getTool: z.string().optional().describe("MCP tool name for get-by-id operations"),
+  config: z.record(z.string(), z.unknown()).optional().describe("Additional config passed to MCP tools"),
 })
 
 export const NotebookLMProviderConfigSchema = z.object({
@@ -406,6 +413,7 @@ export const OhMyOpenCodeConfigSchema = z.object({
   skills: SkillsConfigSchema.optional(),
   ralph_loop: RalphLoopConfigSchema.optional(),
   mem0: Mem0ConfigSchema.optional(),
+  letta: Mem0ConfigSchema.optional(),
   knowledge_repo: KnowledgeRepoConfigSchema.optional(),
   knowledge_provider: KnowledgeProviderConfigSchema.optional(),
   openspec: OpenSpecConfigSchema.optional(),

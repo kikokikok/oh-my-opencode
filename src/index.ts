@@ -50,6 +50,7 @@ import {
   createLookAt,
   createSkillTool,
   createSkillMcpTool,
+  createKnowledgeProviderTools,
   sessionExists,
   interactive_bash,
   getTmuxPath,
@@ -58,6 +59,14 @@ import { createMemoryTools } from "./tools/memory";
 import { Mem0Adapter } from "./features/mem0-memory/adapter";
 import { createKnowledgeMonitorHook } from "./hooks/knowledge-monitor";
 import { createMemoryRehydrationHook } from "./hooks/memory-rehydration";
+import {
+  KnowledgeProviderRegistry,
+  LocalKnowledgeProvider,
+  Mem0KnowledgeProvider,
+  MCPKnowledgeProvider,
+  KnowledgeMcpManager,
+  NotebookLMKnowledgeProvider,
+} from "./features/knowledge-provider";
 import { BackgroundManager } from "./features/background-agent";
 import { SkillMcpManager } from "./features/skill-mcp-manager";
 import { type HookName } from "./config";
@@ -65,6 +74,81 @@ import { log } from "./shared";
 import { loadPluginConfig } from "./plugin-config";
 import { createModelCacheState, getModelLimit } from "./plugin-state";
 import { createConfigHandler } from "./plugin-handlers";
+import type { OhMyOpenCodeConfig } from "./config";
+
+async function initializeKnowledgeProviderRegistry(
+  pluginConfig: OhMyOpenCodeConfig,
+  mem0Adapter: Mem0Adapter | null
+): Promise<KnowledgeProviderRegistry> {
+  const config = pluginConfig.knowledge_provider!;
+  const registry = new KnowledgeProviderRegistry({
+    defaultLimit: config.search?.defaultLimit ?? 10,
+    defaultThreshold: config.search?.defaultThreshold ?? 0.5,
+    mergeStrategy: config.search?.mergeStrategy ?? "score",
+    providerPriority: config.search?.providerPriority,
+    deduplicate: config.search?.deduplicate ?? true,
+  });
+
+  if (config.providers?.local?.enabled !== false) {
+    const localProvider = new LocalKnowledgeProvider({
+      enabled: true,
+      rootDir: config.providers?.local?.rootDir,
+    });
+    await registry.register(localProvider);
+  }
+
+  if (mem0Adapter && config.providers?.mem0?.enabled !== false) {
+    const mem0Provider = new Mem0KnowledgeProvider(
+      {
+        enabled: true,
+        indexKnowledgeRepo: config.providers?.mem0?.indexKnowledgeRepo ?? false,
+        searchLayers: config.providers?.mem0?.searchLayers,
+      },
+      {
+        enabled: true,
+        apiKey: pluginConfig.mem0!.apiKey,
+        endpoint: pluginConfig.mem0!.endpoint,
+        userId: pluginConfig.mem0!.userId,
+        sessionId: pluginConfig.mem0!.sessionId,
+        projectId: pluginConfig.mem0!.projectId,
+        teamId: pluginConfig.mem0!.teamId,
+        orgId: pluginConfig.mem0!.orgId,
+        companyId: pluginConfig.mem0!.companyId,
+        agentId: pluginConfig.mem0!.agentId,
+      }
+    );
+    await registry.register(mem0Provider);
+  }
+
+  const hasMcpServers = config.providers?.mcp?.enabled && config.providers?.mcp?.servers?.length;
+  const hasNotebookLM = config.providers?.notebooklm?.enabled;
+
+  if (hasMcpServers || hasNotebookLM) {
+    const mcpManager = new KnowledgeMcpManager();
+
+    if (hasMcpServers) {
+      for (const serverConfig of config.providers!.mcp!.servers) {
+        mcpManager.registerServer(serverConfig);
+
+        const mcpProvider = new MCPKnowledgeProvider(serverConfig, mcpManager);
+        await registry.register(mcpProvider);
+      }
+    }
+
+    if (hasNotebookLM) {
+      const notebookLMProvider = new NotebookLMKnowledgeProvider(
+        {
+          enabled: true,
+          defaultNotebookId: config.providers!.notebooklm!.defaultNotebookId,
+        },
+        mcpManager
+      );
+      await registry.register(notebookLMProvider);
+    }
+  }
+
+  return registry;
+}
 
 const OhMyOpenCodePlugin: Plugin = async (ctx) => {
   const pluginConfig = loadPluginConfig(ctx.directory, ctx);
@@ -89,6 +173,11 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     : null;
 
   const memoryTools = mem0Adapter ? createMemoryTools(mem0Adapter) : {};
+
+  const knowledgeProviderRegistry =
+    pluginConfig.knowledge_provider?.enabled
+      ? await initializeKnowledgeProviderRegistry(pluginConfig, mem0Adapter)
+      : null;
 
   const knowledgeMonitor =
     isHookEnabled("knowledge-monitor") && pluginConfig.knowledge_repo?.enabled
@@ -285,6 +374,10 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     modelCacheState,
   });
 
+  const knowledgeProviderTools = knowledgeProviderRegistry
+    ? createKnowledgeProviderTools(knowledgeProviderRegistry)
+    : {};
+
   return {
     ...(googleAuthHooks ? { auth: googleAuthHooks.auth } : {}),
 
@@ -292,6 +385,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       ...builtinTools,
       ...backgroundTools,
       ...memoryTools,
+      ...knowledgeProviderTools,
       call_omo_agent: callOmoAgent,
       look_at: lookAt,
       skill: skillTool,

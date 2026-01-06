@@ -3226,6 +3226,67 @@
         }
       }
     },
+    "letta": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "apiKey": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string",
+          "format": "uri"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "teamId": {
+          "type": "string"
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "companyId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        },
+        "autoRehydrate": {
+          "default": true,
+          "type": "boolean"
+        },
+        "rehydrateLayers": {
+          "default": [
+            "user",
+            "project",
+            "team"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "user",
+              "session",
+              "project",
+              "team",
+              "org",
+              "company",
+              "agent"
+            ]
+          }
+        }
+      }
+    },
     "knowledge_repo": {
       "type": "object",
       "properties": {
@@ -3363,13 +3424,49 @@
                       "name": {
                         "type": "string"
                       },
+                      "transport": {
+                        "description": "Transport type: 'stdio' (default) or 'sse'",
+                        "type": "string",
+                        "enum": [
+                          "stdio",
+                          "sse"
+                        ]
+                      },
+                      "command": {
+                        "description": "Command to start the MCP server (required for stdio transport)",
+                        "type": "string"
+                      },
+                      "args": {
+                        "description": "Arguments for the command (stdio transport)",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "env": {
+                        "description": "Environment variables (stdio transport)",
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      "url": {
+                        "description": "SSE endpoint URL (required for sse transport, e.g., 'http://localhost:60062/sse')",
+                        "type": "string"
+                      },
                       "searchTool": {
+                        "description": "MCP tool name for search operations",
                         "type": "string"
                       },
                       "getTool": {
+                        "description": "MCP tool name for get-by-id operations",
                         "type": "string"
                       },
                       "config": {
+                        "description": "Additional config passed to MCP tools",
                         "type": "object",
                         "propertyNames": {
                           "type": "string"

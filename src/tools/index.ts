@@ -33,6 +33,7 @@ import {
   knowledge_list,
   knowledge_show,
   knowledge_propose,
+  createKnowledgeProviderTools,
 } from "./knowledge"
 
 export { sessionExists } from "./session-manager/storage"
@@ -55,6 +56,7 @@ type OpencodeClient = PluginInput["client"]
 
 export { createCallOmoAgent } from "./call-omo-agent"
 export { createLookAt } from "./look-at"
+export { createKnowledgeProviderTools } from "./knowledge"
 
 export function createBackgroundTools(manager: BackgroundManager, client: OpencodeClient): Record<string, ToolDefinition> {
   return {

@@ -12,6 +12,20 @@ import {
   getPackageName,
 } from "./shared";
 
+function normalizeLettaToMem0(config: OhMyOpenCodeConfig): OhMyOpenCodeConfig {
+  if (!config.letta) {
+    return config;
+  }
+
+  const { letta, ...rest } = config;
+
+  if (config.mem0) {
+    return { ...rest, mem0: deepMerge(letta, config.mem0) };
+  }
+
+  return { ...rest, mem0: letta };
+}
+
 export function loadConfigFromPath(
   configPath: string,
   ctx: unknown
@@ -37,8 +51,9 @@ export function loadConfigFromPath(
         return null;
       }
 
-      log(`Config loaded from ${configPath}`, { agents: result.data.agents });
-      return result.data;
+      const normalized = normalizeLettaToMem0(result.data);
+      log(`Config loaded from ${configPath}`, { agents: normalized.agents });
+      return normalized;
     }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -56,6 +71,7 @@ export function mergeConfigs(
     ...base,
     ...override,
     agents: deepMerge(base.agents, override.agents),
+    mem0: deepMerge(base.mem0, override.mem0),
     disabled_agents: [
       ...new Set([
         ...(base.disabled_agents ?? []),

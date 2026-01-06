@@ -11,3 +11,5 @@ export {
   knowledge_show,
   knowledge_propose,
 }
+
+export { createKnowledgeProviderTools } from "./provider-tools"
