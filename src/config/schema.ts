@@ -300,6 +300,22 @@ export const Mem0ConfigSchema = z.object({
   rehydrateLayers: z.array(MemoryLayerSchema).default(["user", "project", "team"]),
 })
 
+export const LettaConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  endpoint: z.string().url().optional().describe("Letta server endpoint (default: http://localhost:8283)"),
+  apiKey: z.string().optional().describe("Optional API key for cloud Letta (not needed for self-hosted)"),
+  userId: z.string().optional(),
+  projectId: z.string().optional(),
+  teamId: z.string().optional(),
+  orgId: z.string().optional(),
+  companyId: z.string().optional(),
+  agentPrefix: z.string().optional().describe("Agent name prefix (default: opencode)"),
+  llmModel: z.string().optional().describe("LLM model for agent (e.g., openai/gpt-4.1)"),
+  embeddingModel: z.string().optional().describe("Embedding model for semantic search"),
+  autoRehydrate: z.boolean().default(true),
+  rehydrateLayers: z.array(MemoryLayerSchema).default(["user", "project", "team"]),
+})
+
 export const CentralHubConfigSchema = z.object({
   url: z.string().url(),
   branch: z.string().default("main"),
@@ -413,7 +429,7 @@ export const OhMyOpenCodeConfigSchema = z.object({
   skills: SkillsConfigSchema.optional(),
   ralph_loop: RalphLoopConfigSchema.optional(),
   mem0: Mem0ConfigSchema.optional(),
-  letta: Mem0ConfigSchema.optional(),
+  letta: LettaConfigSchema.optional(),
   knowledge_repo: KnowledgeRepoConfigSchema.optional(),
   knowledge_provider: KnowledgeProviderConfigSchema.optional(),
   openspec: OpenSpecConfigSchema.optional(),
@@ -434,6 +450,7 @@ export type SkillsConfig = z.infer<typeof SkillsConfigSchema>
 export type SkillDefinition = z.infer<typeof SkillDefinitionSchema>
 export type RalphLoopConfig = z.infer<typeof RalphLoopConfigSchema>
 export type Mem0Config = z.infer<typeof Mem0ConfigSchema>
+export type LettaConfig = z.infer<typeof LettaConfigSchema>
 export type CentralHubConfig = z.infer<typeof CentralHubConfigSchema>
 export type KnowledgeRepoConfig = z.infer<typeof KnowledgeRepoConfigSchema>
 export type OpenSpecConfig = z.infer<typeof OpenSpecConfigSchema>

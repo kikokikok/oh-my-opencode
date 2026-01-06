@@ -1,2 +1,2 @@
 export { createMemoryTools } from "./tools"
-export type { MemoryToolsConfig, MemoryLayer } from "./types"
+export type { MemoryAdapter, MemoryLayer, Memory, MemorySearchResult, MemoryStats } from "./types"

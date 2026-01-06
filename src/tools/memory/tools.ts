@@ -1,6 +1,5 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
-import type { Mem0Adapter } from "../../features/mem0-memory/adapter"
-import type { MemoryLayer } from "../../features/mem0-memory/types"
+import type { MemoryAdapter, MemoryLayer } from "./types"
 import {
   MEMORY_LAYERS,
   DEFAULT_SEARCH_LIMIT,
@@ -8,7 +7,7 @@ import {
   MAX_CONTENT_LENGTH,
 } from "./constants"
 
-export function createMemoryTools(adapter: Mem0Adapter): Record<string, ToolDefinition> {
+export function createMemoryTools(adapter: MemoryAdapter): Record<string, ToolDefinition> {
   const memory_add: ToolDefinition = tool({
     description:
       "Store a memory in Mem0. Use to remember facts, decisions, preferences, or context. " +

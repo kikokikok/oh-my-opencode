@@ -57,6 +57,8 @@ import {
 } from "./tools";
 import { createMemoryTools } from "./tools/memory";
 import { Mem0Adapter } from "./features/mem0-memory/adapter";
+import { LettaAdapter } from "./features/letta-memory/adapter";
+import type { MemoryAdapter } from "./tools/memory/types";
 import { createKnowledgeMonitorHook } from "./hooks/knowledge-monitor";
 import { createMemoryRehydrationHook } from "./hooks/memory-rehydration";
 import {
@@ -172,7 +174,24 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       })
     : null;
 
-  const memoryTools = mem0Adapter ? createMemoryTools(mem0Adapter) : {};
+  const lettaAdapter = pluginConfig.letta?.enabled
+    ? new LettaAdapter({
+        enabled: true,
+        endpoint: pluginConfig.letta.endpoint,
+        apiKey: pluginConfig.letta.apiKey,
+        userId: pluginConfig.letta.userId,
+        projectId: pluginConfig.letta.projectId,
+        teamId: pluginConfig.letta.teamId,
+        orgId: pluginConfig.letta.orgId,
+        companyId: pluginConfig.letta.companyId,
+        agentPrefix: pluginConfig.letta.agentPrefix,
+        llmModel: pluginConfig.letta.llmModel,
+        embeddingModel: pluginConfig.letta.embeddingModel,
+      })
+    : null;
+
+  const memoryAdapter: MemoryAdapter | null = lettaAdapter ?? mem0Adapter;
+  const memoryTools = memoryAdapter ? createMemoryTools(memoryAdapter) : {};
 
   const knowledgeProviderRegistry =
     pluginConfig.knowledge_provider?.enabled
@@ -190,11 +209,11 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
 
   const memoryRehydration =
     isHookEnabled("memory-rehydration") &&
-    mem0Adapter &&
-    pluginConfig.mem0?.autoRehydrate !== false
-      ? createMemoryRehydrationHook(mem0Adapter, {
+    memoryAdapter &&
+    (pluginConfig.letta?.autoRehydrate !== false || pluginConfig.mem0?.autoRehydrate !== false)
+      ? createMemoryRehydrationHook(memoryAdapter, {
           enabled: true,
-          layers: pluginConfig.mem0?.rehydrateLayers,
+          layers: pluginConfig.letta?.rehydrateLayers ?? pluginConfig.mem0?.rehydrateLayers,
         })
       : null;
 

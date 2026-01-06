@@ -3233,17 +3233,16 @@
           "default": false,
           "type": "boolean"
         },
-        "apiKey": {
-          "type": "string"
-        },
         "endpoint": {
+          "description": "Letta server endpoint (default: http://localhost:8283)",
           "type": "string",
           "format": "uri"
         },
-        "userId": {
+        "apiKey": {
+          "description": "Optional API key for cloud Letta (not needed for self-hosted)",
           "type": "string"
         },
-        "sessionId": {
+        "userId": {
           "type": "string"
         },
         "projectId": {
@@ -3258,7 +3257,16 @@
         "companyId": {
           "type": "string"
         },
-        "agentId": {
+        "agentPrefix": {
+          "description": "Agent name prefix (default: opencode)",
+          "type": "string"
+        },
+        "llmModel": {
+          "description": "LLM model for agent (e.g., openai/gpt-4.1)",
+          "type": "string"
+        },
+        "embeddingModel": {
+          "description": "Embedding model for semantic search",
           "type": "string"
         },
         "autoRehydrate": {

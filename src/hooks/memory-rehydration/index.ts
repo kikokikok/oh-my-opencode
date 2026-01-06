@@ -1,5 +1,4 @@
-import type { Mem0Adapter } from "../../features/mem0-memory/adapter"
-import type { MemoryLayer } from "../../features/mem0-memory/types"
+import type { MemoryAdapter, MemoryLayer } from "../../tools/memory/types"
 import type { MemoryRehydrationConfig, RehydrationResult } from "./types"
 import {
   HOOK_NAME,
@@ -20,7 +19,7 @@ export interface MemoryRehydrationHook {
 }
 
 export function createMemoryRehydrationHook(
-  adapter: Mem0Adapter,
+  adapter: MemoryAdapter,
   config?: MemoryRehydrationConfig
 ): MemoryRehydrationHook {
   const enabled = config?.enabled ?? true
