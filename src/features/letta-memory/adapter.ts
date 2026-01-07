@@ -422,11 +422,17 @@ export class LettaAdapter {
       body?: string
     }
   ): Promise<Response> {
-    // Letta API requires trailing slashes on all endpoints
-    // Without them, the API returns 307 redirects which cause empty responses
+    // Letta API behavior:
+    // - Most endpoints require trailing slashes (307 redirect without)
+    // - Search endpoint requires NO trailing slash (307 redirect with)
     const basePath = path.split("?")[0]
     const queryString = path.includes("?") ? path.slice(path.indexOf("?")) : ""
-    const normalizedBase = basePath.endsWith("/") ? basePath : `${basePath}/`
+    const isSearchEndpoint = basePath.endsWith("/search")
+    const normalizedBase = isSearchEndpoint
+      ? basePath
+      : basePath.endsWith("/")
+        ? basePath
+        : `${basePath}/`
     const normalizedPath = `${normalizedBase}${queryString}`
 
     const headers: Record<string, string> = {
