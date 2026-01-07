@@ -40,7 +40,7 @@ export class LettaAdapter {
 
   private async detectEmbeddingModel(): Promise<string> {
     if (this.config.embeddingModel) {
-      return this.config.embeddingModel
+      return this.normalizeModelHandle(this.config.embeddingModel)
     }
 
     if (this.detectedEmbeddingModel) {
@@ -77,7 +77,7 @@ export class LettaAdapter {
           const preferredName = this.config.preferredEmbeddingModel ?? "text-embedding-3-small"
           const preferred = proxyEmbeddingModels.find((m) => m.name.includes(preferredName))
           const model = preferred ?? proxyEmbeddingModels[0]
-          this.detectedEmbeddingModel = `openai/${model.name}`
+          this.detectedEmbeddingModel = model.handle
         }
       } catch {
         // Fall back to default
@@ -86,6 +86,13 @@ export class LettaAdapter {
 
     await this.modelDetectionPromise
     return this.detectedEmbeddingModel ?? DEFAULT_EMBEDDING_MODEL
+  }
+
+  private normalizeModelHandle(model: string): string {
+    if (model.startsWith("openai/") && !model.startsWith("openai-proxy/")) {
+      return model.replace("openai/", "openai-proxy/")
+    }
+    return model
   }
 
   async add(input: AddMemoryInput): Promise<Memory> {
@@ -315,13 +322,14 @@ export class LettaAdapter {
     }
 
     const embeddingModel = await this.detectEmbeddingModel()
+    const llmModel = this.normalizeModelHandle(this.config.llmModel ?? DEFAULT_LLM_MODEL)
     const agentName = this.getAgentName(layer)
     
     const response = await this.request("/v1/agents", {
       method: "POST",
       body: JSON.stringify({
         name: agentName,
-        model: this.config.llmModel ?? DEFAULT_LLM_MODEL,
+        model: llmModel,
         embedding: embeddingModel,
         memory_blocks: [
           { label: "persona", value: `OpenCode memory agent for ${layer} layer` },
@@ -365,12 +373,13 @@ export class LettaAdapter {
     this.agentCache.delete(layer)
 
     const embeddingModel = await this.detectEmbeddingModel()
+    const llmModel = this.normalizeModelHandle(this.config.llmModel ?? DEFAULT_LLM_MODEL)
     const agentName = this.getAgentName(layer)
     const response = await this.request("/v1/agents", {
       method: "POST",
       body: JSON.stringify({
         name: agentName,
-        model: this.config.llmModel ?? DEFAULT_LLM_MODEL,
+        model: llmModel,
         embedding: embeddingModel,
         memory_blocks: [
           { label: "persona", value: `OpenCode memory agent for ${layer} layer` },
