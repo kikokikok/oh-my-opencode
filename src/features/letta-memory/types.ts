@@ -35,8 +35,25 @@ export interface LettaConfig {
   agentPrefix?: string
   /** LLM model for agent (e.g., "openai/gpt-4.1") */
   llmModel?: string
-  /** Embedding model for semantic search */
+  /**
+   * Embedding model for semantic search.
+   * Use format "provider/model" e.g.:
+   * - "openai/text-embedding-3-large" (best quality, 3072 dimensions)
+   * - "openai/text-embedding-3-small" (good balance, 1536 dimensions)
+   * - "openai/text-embedding-ada-002" (legacy)
+   * - "letta/letta-free" (default, requires Letta cloud auth)
+   *
+   * If not set, auto-detects local proxy models with "openai" provider.
+   */
   embeddingModel?: string
+  /**
+   * Preferred embedding model for auto-detection.
+   * When embeddingModel is not set and multiple proxy models are available,
+   * this determines which one to prefer. Partial match on model name.
+   * Default: "text-embedding-3-small"
+   * Set to "text-embedding-3-large" for better quality.
+   */
+  preferredEmbeddingModel?: string
   /** Auto-rehydrate memories on session start */
   autoRehydrate?: boolean
   /** Layers to rehydrate */
@@ -53,6 +70,12 @@ export interface LettaAgent {
   metadata?: Record<string, unknown>
   memory_blocks?: LettaBlock[]
   tools?: string[]
+  embedding?: string
+  embedding_config?: {
+    handle?: string
+    embedding_model?: string
+    embedding_endpoint?: string
+  }
 }
 
 /** Letta Memory Block (Core Memory - always in-context) */

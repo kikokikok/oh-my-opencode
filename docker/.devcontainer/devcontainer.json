@@ -1,0 +1,39 @@
+{
+  "name": "oh-my-opencode",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-python.python",
+        "golang.go",
+        "rust-lang.rust-analyzer"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  "forwardPorts": [8283, 4141],
+  
+  "postStartCommand": "/usr/local/bin/start-services.sh",
+  
+  "remoteUser": "vscode",
+
+  "containerEnv": {
+    "OPENAI_API_BASE": "http://localhost:4141/v1",
+    "OPENAI_API_KEY": "dummy"
+  }
+}

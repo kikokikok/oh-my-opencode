@@ -625,3 +625,428 @@ describe("LettaAdapter with mocked fetch", () => {
     expect(stats.totalMemories).toBeGreaterThanOrEqual(0)
   })
 })
+
+describe("LettaAdapter embedding model detection", () => {
+  const originalFetch = globalThis.fetch
+
+  beforeEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  test("detects proxy embedding model from /v1/models", async () => {
+    // #given
+    let usedEmbeddingModel = ""
+
+    globalThis.fetch = mock(
+      async (url: string | URL | Request, options?: RequestInit) => {
+        const urlStr = url.toString()
+
+        if (urlStr.includes("/v1/models")) {
+          return new Response(
+            JSON.stringify([
+              {
+                handle: "letta/letta-free",
+                name: "letta-free",
+                model_endpoint: "https://inference.letta.com/v1/",
+                provider_name: "letta",
+              },
+              {
+                handle: "openai-proxy/text-embedding-3-small",
+                name: "text-embedding-3-small",
+                model_endpoint: "http://host.docker.internal:4141/v1",
+                provider_name: "openai",
+              },
+              {
+                handle: "openai-proxy/gpt-4o",
+                name: "gpt-4o",
+                model_endpoint: "http://host.docker.internal:4141/v1",
+                provider_name: "openai",
+              },
+            ]),
+            { status: 200 }
+          )
+        }
+
+        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+          return new Response(JSON.stringify([]), { status: 200 })
+        }
+
+        // Check archival-memory BEFORE generic /v1/agents POST (since archival URL contains /v1/agents/)
+        if (urlStr.includes("/archival-memory") && options?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              id: "passage-456",
+              text: "test",
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        if (urlStr.endsWith("/v1/agents") && options?.method === "POST") {
+          const body = JSON.parse(options?.body as string)
+          usedEmbeddingModel = body.embedding
+          return new Response(
+            JSON.stringify({
+              id: "agent-123",
+              name: body.name,
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        return new Response("Not found", { status: 404 })
+      }
+    ) as unknown as typeof fetch
+
+    const adapter = new LettaAdapter({
+      enabled: true,
+      endpoint: "http://localhost:8283",
+    })
+
+    // #when
+    await adapter.add({ content: "test", layer: "user" })
+
+    // #then
+    expect(usedEmbeddingModel).toBe("openai/text-embedding-3-small")
+  })
+
+  test("falls back to default when no proxy embedding found", async () => {
+    // #given
+    let usedEmbeddingModel = ""
+
+    globalThis.fetch = mock(
+      async (url: string | URL | Request, options?: RequestInit) => {
+        const urlStr = url.toString()
+
+        if (urlStr.includes("/v1/models")) {
+          return new Response(
+            JSON.stringify([
+              {
+                handle: "letta/letta-free",
+                name: "letta-free",
+                model_endpoint: "https://inference.letta.com/v1/",
+              },
+            ]),
+            { status: 200 }
+          )
+        }
+
+        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+          return new Response(JSON.stringify([]), { status: 200 })
+        }
+
+        // Check archival-memory BEFORE generic /v1/agents POST
+        if (urlStr.includes("/archival-memory") && options?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              id: "passage-456",
+              text: "test",
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        if (urlStr.endsWith("/v1/agents") && options?.method === "POST") {
+          const body = JSON.parse(options?.body as string)
+          usedEmbeddingModel = body.embedding
+          return new Response(
+            JSON.stringify({
+              id: "agent-123",
+              name: body.name,
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        return new Response("Not found", { status: 404 })
+      }
+    ) as unknown as typeof fetch
+
+    const adapter = new LettaAdapter({
+      enabled: true,
+      endpoint: "http://localhost:8283",
+    })
+
+    // #when
+    await adapter.add({ content: "test", layer: "user" })
+
+    // #then
+    expect(usedEmbeddingModel).toBe("letta/letta-free")
+  })
+
+  test("uses config embeddingModel when provided", async () => {
+    // #given
+    let usedEmbeddingModel = ""
+
+    globalThis.fetch = mock(
+      async (url: string | URL | Request, options?: RequestInit) => {
+        const urlStr = url.toString()
+
+        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+          return new Response(JSON.stringify([]), { status: 200 })
+        }
+
+        if (urlStr.includes("/archival-memory") && options?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              id: "passage-456",
+              text: "test",
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        if (urlStr.endsWith("/v1/agents") && options?.method === "POST") {
+          const body = JSON.parse(options?.body as string)
+          usedEmbeddingModel = body.embedding
+          return new Response(
+            JSON.stringify({
+              id: "agent-123",
+              name: body.name,
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        return new Response("Not found", { status: 404 })
+      }
+    ) as unknown as typeof fetch
+
+    const adapter = new LettaAdapter({
+      enabled: true,
+      endpoint: "http://localhost:8283",
+      embeddingModel: "custom/my-embedding",
+    })
+
+    // #when
+    await adapter.add({ content: "test", layer: "user" })
+
+    // #then
+    expect(usedEmbeddingModel).toBe("custom/my-embedding")
+  })
+
+  test("uses preferredEmbeddingModel for auto-detection", async () => {
+    // #given
+    let usedEmbeddingModel = ""
+
+    globalThis.fetch = mock(
+      async (url: string | URL | Request, options?: RequestInit) => {
+        const urlStr = url.toString()
+
+        if (urlStr.includes("/v1/models")) {
+          return new Response(
+            JSON.stringify([
+              {
+                handle: "openai-proxy/text-embedding-3-small",
+                name: "text-embedding-3-small",
+                model_endpoint: "http://host.docker.internal:4141/v1",
+                provider_name: "openai",
+              },
+              {
+                handle: "openai-proxy/text-embedding-3-large",
+                name: "text-embedding-3-large",
+                model_endpoint: "http://host.docker.internal:4141/v1",
+                provider_name: "openai",
+              },
+            ]),
+            { status: 200 }
+          )
+        }
+
+        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+          return new Response(JSON.stringify([]), { status: 200 })
+        }
+
+        if (urlStr.includes("/archival-memory") && options?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              id: "passage-456",
+              text: "test",
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        if (urlStr.endsWith("/v1/agents") && options?.method === "POST") {
+          const body = JSON.parse(options?.body as string)
+          usedEmbeddingModel = body.embedding
+          return new Response(
+            JSON.stringify({
+              id: "agent-123",
+              name: body.name,
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        return new Response("Not found", { status: 404 })
+      }
+    ) as unknown as typeof fetch
+
+    const adapter = new LettaAdapter({
+      enabled: true,
+      endpoint: "http://localhost:8283",
+      preferredEmbeddingModel: "text-embedding-3-large",
+    })
+
+    // #when
+    await adapter.add({ content: "test", layer: "user" })
+
+    // #then
+    expect(usedEmbeddingModel).toBe("openai/text-embedding-3-large")
+  })
+
+  test("recreates agent when using letta-free embedding and better model available", async () => {
+    // #given
+    let deleteAgentCalled = false
+    let createAgentCalls = 0
+    let lastEmbeddingModel = ""
+
+    globalThis.fetch = mock(
+      async (url: string | URL | Request, options?: RequestInit) => {
+        const urlStr = url.toString()
+
+        if (urlStr.includes("/v1/models")) {
+          return new Response(
+            JSON.stringify([
+              {
+                handle: "openai-proxy/text-embedding-3-small",
+                name: "text-embedding-3-small",
+                model_endpoint: "http://host.docker.internal:4141/v1",
+                provider_name: "openai",
+              },
+            ]),
+            { status: 200 }
+          )
+        }
+
+        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+          return new Response(
+            JSON.stringify([
+              {
+                id: "old-agent-123",
+                name: "opencode-user-default-user",
+                created_at: "2026-01-03T00:00:00Z",
+                embedding: "letta/letta-free",
+                embedding_config: { handle: "letta/letta-free" },
+              },
+            ]),
+            { status: 200 }
+          )
+        }
+
+        if (
+          urlStr.includes("/v1/agents/old-agent-123") &&
+          options?.method === "DELETE"
+        ) {
+          deleteAgentCalled = true
+          return new Response("", { status: 204 })
+        }
+
+        if (urlStr.includes("/archival-memory") && options?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              id: "passage-789",
+              text: "test",
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        if (urlStr.endsWith("/v1/agents") && options?.method === "POST") {
+          createAgentCalls++
+          const body = JSON.parse(options?.body as string)
+          lastEmbeddingModel = body.embedding
+          return new Response(
+            JSON.stringify({
+              id: "new-agent-456",
+              name: body.name,
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        return new Response("Not found", { status: 404 })
+      }
+    ) as unknown as typeof fetch
+
+    const adapter = new LettaAdapter({
+      enabled: true,
+      endpoint: "http://localhost:8283",
+    })
+
+    // #when
+    await adapter.add({ content: "test", layer: "user" })
+
+    // #then
+    expect(deleteAgentCalled).toBe(true)
+    expect(createAgentCalls).toBe(1)
+    expect(lastEmbeddingModel).toBe("openai/text-embedding-3-small")
+  })
+
+  test("does not recreate agent when config embeddingModel is set", async () => {
+    // #given
+    let deleteAgentCalled = false
+
+    globalThis.fetch = mock(
+      async (url: string | URL | Request, options?: RequestInit) => {
+        const urlStr = url.toString()
+
+        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+          return new Response(
+            JSON.stringify([
+              {
+                id: "agent-123",
+                name: "opencode-user-default-user",
+                created_at: "2026-01-03T00:00:00Z",
+                embedding: "letta/letta-free",
+                embedding_config: { handle: "letta/letta-free" },
+              },
+            ]),
+            { status: 200 }
+          )
+        }
+
+        if (options?.method === "DELETE") {
+          deleteAgentCalled = true
+          return new Response("", { status: 204 })
+        }
+
+        if (urlStr.includes("/archival-memory") && options?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              id: "passage-456",
+              text: "test",
+              created_at: "2026-01-03T00:00:00Z",
+            }),
+            { status: 200 }
+          )
+        }
+
+        return new Response("Not found", { status: 404 })
+      }
+    ) as unknown as typeof fetch
+
+    const adapter = new LettaAdapter({
+      enabled: true,
+      endpoint: "http://localhost:8283",
+      embeddingModel: "letta/letta-free",
+    })
+
+    // #when
+    await adapter.add({ content: "test", layer: "user" })
+
+    // #then
+    expect(deleteAgentCalled).toBe(false)
+  })
+})

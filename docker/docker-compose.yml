@@ -1,0 +1,107 @@
+services:
+  # ═══════════════════════════════════════════════════════════════════
+  # PostgreSQL - Letta's database
+  # ═══════════════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:15-alpine
+    container_name: omo-postgres
+    environment:
+      POSTGRES_USER: ${LETTA_POSTGRES_USER:-letta}
+      POSTGRES_PASSWORD: ${LETTA_POSTGRES_PASSWORD:-letta}
+      POSTGRES_DB: ${LETTA_POSTGRES_DB:-letta}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LETTA_POSTGRES_USER:-letta} -d ${LETTA_POSTGRES_DB:-letta}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - omo-network
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Letta - Memory server with archival/core memory
+  # ═══════════════════════════════════════════════════════════════════
+  letta:
+    image: letta/letta:latest
+    container_name: omo-letta
+    ports:
+      - "${LETTA_PORT:-8283}:8283"
+    environment:
+      # Database connection
+      LETTA_PG_URI: postgresql://${LETTA_POSTGRES_USER:-letta}:${LETTA_POSTGRES_PASSWORD:-letta}@postgres:5432/${LETTA_POSTGRES_DB:-letta}
+      
+      # OpenAI-compatible API for LLM and embeddings
+      # Default: Copilot API on host (host.docker.internal:4141)
+      # Override with OPENAI_API_BASE for LiteLLM or other providers
+      OPENAI_API_BASE: ${OPENAI_API_BASE:-http://host.docker.internal:4141/v1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-dummy}
+      
+      # Letta settings
+      LETTA_ENVIRONMENT: ${LETTA_ENVIRONMENT:-PRODUCTION}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8283/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - omo-network
+
+  # ═══════════════════════════════════════════════════════════════════
+  # LiteLLM - LLM/Embedding proxy
+  # ═══════════════════════════════════════════════════════════════════
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: omo-litellm
+    ports:
+      - "${LITELLM_PORT:-4141}:4141"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-omo-litellm}
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4141"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4141/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - omo-network
+    profiles:
+      - litellm
+      - full
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Copilot API - GitHub Copilot proxy (optional)
+  # ═══════════════════════════════════════════════════════════════════
+  copilot-api:
+    image: node:20-alpine
+    container_name: omo-copilot-api
+    ports:
+      - "${COPILOT_API_PORT:-60062}:60062"
+    command: ["npx", "copilot-api@latest", "start", "--port", "60062"]
+    restart: unless-stopped
+    networks:
+      - omo-network
+    profiles:
+      - copilot
+      - full
+
+volumes:
+  postgres_data:
+    name: omo-postgres-data
+
+networks:
+  omo-network:
+    name: omo-network
+    driver: bridge

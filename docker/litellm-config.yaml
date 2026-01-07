@@ -1,0 +1,163 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# LiteLLM Configuration for oh-my-opencode
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This file configures the LiteLLM proxy for:
+# 1. Embedding models (required for Letta memory)
+# 2. LLM models (optional if using GitHub Copilot)
+#
+# Environment variables are loaded from docker/.env or system environment.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+model_list:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # EMBEDDING MODELS
+  # ═══════════════════════════════════════════════════════════════════════════
+  # These are required for Letta memory to work. At least one embedding model
+  # must be configured for semantic search and memory retrieval.
+  #
+  # Recommended: text-embedding-3-small (good quality, low cost)
+  # Best quality: text-embedding-3-large (higher dimensions, better retrieval)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - model_name: text-embedding-3-large
+    litellm_params:
+      model: openai/text-embedding-3-large
+      api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      mode: embedding
+      # 3072 dimensions, best quality
+      # $0.13 per 1M tokens
+
+  - model_name: text-embedding-3-small
+    litellm_params:
+      model: openai/text-embedding-3-small
+      api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      mode: embedding
+      # 1536 dimensions, good balance of quality and cost
+      # $0.02 per 1M tokens
+
+  - model_name: text-embedding-ada-002
+    litellm_params:
+      model: openai/text-embedding-ada-002
+      api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      mode: embedding
+      # 1536 dimensions, legacy model
+      # $0.10 per 1M tokens
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # LLM MODELS - OpenAI
+  # ═══════════════════════════════════════════════════════════════════════════
+  # These are optional if you're using GitHub Copilot for LLM calls.
+  # Uncomment if you want to use OpenAI directly for agents.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: gpt-4-turbo
+    litellm_params:
+      model: openai/gpt-4-turbo
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: o1
+    litellm_params:
+      model: openai/o1
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: o1-mini
+    litellm_params:
+      model: openai/o1-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # LLM MODELS - Anthropic
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Requires ANTHROPIC_API_KEY environment variable.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - model_name: claude-sonnet-4
+    litellm_params:
+      model: anthropic/claude-sonnet-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-opus-4
+    litellm_params:
+      model: anthropic/claude-opus-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-3-haiku
+    litellm_params:
+      model: anthropic/claude-3-haiku-20240307
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # LLM MODELS - Google
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Requires GOOGLE_API_KEY environment variable.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - model_name: gemini-2.0-flash
+    litellm_params:
+      model: gemini/gemini-2.0-flash
+      api_key: os.environ/GOOGLE_API_KEY
+
+  - model_name: gemini-1.5-pro
+    litellm_params:
+      model: gemini/gemini-1.5-pro
+      api_key: os.environ/GOOGLE_API_KEY
+
+  - model_name: gemini-1.5-flash
+    litellm_params:
+      model: gemini/gemini-1.5-flash
+      api_key: os.environ/GOOGLE_API_KEY
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LITELLM SERVER SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+litellm_settings:
+  # Enable detailed logging for debugging
+  set_verbose: false
+  
+  # Cache settings (optional - uncomment to enable)
+  # cache: true
+  # cache_params:
+  #   type: "redis"
+  #   host: "redis"
+  #   port: 6379
+  
+  # Request timeout (seconds)
+  request_timeout: 600
+  
+  # Number of retries on failure
+  num_retries: 3
+  
+  # Allowed fails before circuit breaker
+  allowed_fails: 3
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GENERAL SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+general_settings:
+  # Master key for admin operations (set via LITELLM_MASTER_KEY env var)
+  master_key: os.environ/LITELLM_MASTER_KEY
+  
+  # Database for tracking usage (optional - uncomment to enable)
+  # database_url: "postgresql://user:password@host:5432/litellm"

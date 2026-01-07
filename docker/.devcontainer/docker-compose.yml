@@ -1,0 +1,24 @@
+services:
+  workspace:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+      - postgres-data:/var/lib/postgresql/data
+      - opencode-config:/home/vscode/.config/opencode
+    environment:
+      POSTGRES_USER: letta
+      POSTGRES_PASSWORD: letta
+      POSTGRES_DB: letta
+      LETTA_PG_URI: postgresql://letta:letta@localhost:5432/letta
+      OPENAI_API_BASE: http://localhost:4141/v1
+      OPENAI_API_KEY: dummy
+    ports:
+      - "8283:8283"
+      - "4141:4141"
+    command: sleep infinity
+
+volumes:
+  postgres-data:
+  opencode-config:

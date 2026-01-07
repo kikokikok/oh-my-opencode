@@ -14,17 +14,77 @@ import type {
 
 const DEFAULT_ENDPOINT = "http://localhost:8283"
 const DEFAULT_AGENT_PREFIX = "opencode"
-const DEFAULT_LLM_MODEL = "openai/gpt-4.1"
-const DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
+const DEFAULT_LLM_MODEL = "letta/letta-free"
+const DEFAULT_EMBEDDING_MODEL = "letta/letta-free"
+
+interface LettaModel {
+  handle: string
+  name: string
+  model_endpoint: string
+  model_type?: string
+  provider_name?: string
+}
 
 export class LettaAdapter {
   private config: LettaConfig
   private endpoint: string
   private agentCache: Map<string, LettaAgent> = new Map()
+  private detectedEmbeddingModel: string | null = null
+  private modelDetectionPromise: Promise<void> | null = null
 
   constructor(config: LettaConfig) {
     this.config = config
     this.endpoint = config.endpoint ?? DEFAULT_ENDPOINT
+  }
+
+  private async detectEmbeddingModel(): Promise<string> {
+    if (this.config.embeddingModel) {
+      return this.config.embeddingModel
+    }
+
+    if (this.detectedEmbeddingModel) {
+      return this.detectedEmbeddingModel
+    }
+
+    if (this.modelDetectionPromise) {
+      await this.modelDetectionPromise
+      return this.detectedEmbeddingModel ?? DEFAULT_EMBEDDING_MODEL
+    }
+
+    this.modelDetectionPromise = (async () => {
+      try {
+        const response = await fetch(`${this.endpoint}/v1/models`, {
+          method: "GET",
+          redirect: "follow",
+          signal: AbortSignal.timeout(10000),
+        })
+
+        if (!response.ok) {
+          return
+        }
+
+        const models = (await response.json()) as LettaModel[]
+
+        const proxyEmbeddingModels = models.filter(
+          (m) =>
+            m.name.includes("embedding") &&
+            m.model_endpoint.includes("host.docker.internal") &&
+            m.provider_name === "openai"
+        )
+
+        if (proxyEmbeddingModels.length > 0) {
+          const preferredName = this.config.preferredEmbeddingModel ?? "text-embedding-3-small"
+          const preferred = proxyEmbeddingModels.find((m) => m.name.includes(preferredName))
+          const model = preferred ?? proxyEmbeddingModels[0]
+          this.detectedEmbeddingModel = `openai/${model.name}`
+        }
+      } catch {
+        // Fall back to default
+      }
+    })()
+
+    await this.modelDetectionPromise
+    return this.detectedEmbeddingModel ?? DEFAULT_EMBEDDING_MODEL
   }
 
   async add(input: AddMemoryInput): Promise<Memory> {
@@ -224,6 +284,7 @@ export class LettaAdapter {
     try {
       const response = await fetch(`${this.endpoint}/v1/health`, {
         method: "GET",
+        redirect: "follow",
         signal: AbortSignal.timeout(5000),
       })
       return response.ok
@@ -234,15 +295,71 @@ export class LettaAdapter {
 
   private async getOrCreateAgent(layer: MemoryLayer): Promise<LettaAgent> {
     const existing = await this.getAgent(layer)
-    if (existing) return existing
+    if (existing) {
+      const needsUpdate = await this.agentNeedsEmbeddingUpdate(existing)
+      if (needsUpdate) {
+        return this.recreateAgentWithCorrectEmbedding(existing, layer)
+      }
+      return existing
+    }
 
+    const embeddingModel = await this.detectEmbeddingModel()
     const agentName = this.getAgentName(layer)
     const response = await this.request("/v1/agents", {
       method: "POST",
       body: JSON.stringify({
         name: agentName,
         model: this.config.llmModel ?? DEFAULT_LLM_MODEL,
-        embedding: this.config.embeddingModel ?? DEFAULT_EMBEDDING_MODEL,
+        embedding: embeddingModel,
+        memory_blocks: [
+          { label: "persona", value: `OpenCode memory agent for ${layer} layer` },
+          { label: "human", value: this.getUserId(layer) },
+        ],
+        metadata: {
+          layer,
+          user_id: this.getUserId(layer),
+          created_by: "oh-my-opencode",
+        },
+      }),
+    })
+
+    const agent = (await response.json()) as LettaAgent
+    this.agentCache.set(layer, agent)
+    return agent
+  }
+
+  private async agentNeedsEmbeddingUpdate(agent: LettaAgent): Promise<boolean> {
+    if (this.config.embeddingModel) {
+      return false
+    }
+
+    const embeddingHandle = agent.embedding_config?.handle ?? agent.embedding
+    if (!embeddingHandle) return false
+
+    if (embeddingHandle === "letta/letta-free") {
+      const detected = await this.detectEmbeddingModel()
+      return detected !== "letta/letta-free"
+    }
+
+    return false
+  }
+
+  private async recreateAgentWithCorrectEmbedding(
+    existingAgent: LettaAgent,
+    layer: MemoryLayer
+  ): Promise<LettaAgent> {
+    await this.request(`/v1/agents/${existingAgent.id}`, { method: "DELETE" }).catch(() => {})
+
+    this.agentCache.delete(layer)
+
+    const embeddingModel = await this.detectEmbeddingModel()
+    const agentName = this.getAgentName(layer)
+    const response = await this.request("/v1/agents", {
+      method: "POST",
+      body: JSON.stringify({
+        name: agentName,
+        model: this.config.llmModel ?? DEFAULT_LLM_MODEL,
+        embedding: embeddingModel,
         memory_blocks: [
           { label: "persona", value: `OpenCode memory agent for ${layer} layer` },
           { label: "human", value: this.getUserId(layer) },
@@ -305,6 +422,7 @@ export class LettaAdapter {
       method: options.method,
       headers,
       body: options.body,
+      redirect: "follow",
     })
 
     if (!response.ok) {
