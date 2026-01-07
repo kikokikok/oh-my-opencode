@@ -190,6 +190,8 @@ describe("LettaAdapter", () => {
 describe("LettaAdapter with mocked fetch", () => {
   const originalFetch = globalThis.fetch
 
+  const normalizeUrl = (url: string): string => url.replace(/\/$/, "")
+
   beforeEach(() => {
     // Reset fetch to original before each test
     globalThis.fetch = originalFetch
@@ -202,8 +204,12 @@ describe("LettaAdapter with mocked fetch", () => {
 
     globalThis.fetch = mock(
       async (url: string | URL | Request, options?: RequestInit) => {
-        const urlStr = url.toString()
+        const urlStr = normalizeUrl(url.toString())
         capturedRequests.push({ url: urlStr, options: options ?? {} })
+
+        if (urlStr === "http://localhost:8283/v1/models") {
+          return new Response(JSON.stringify([]), { status: 200 })
+        }
 
         if (
           urlStr === "http://localhost:8283/v1/agents" &&
@@ -268,7 +274,11 @@ describe("LettaAdapter with mocked fetch", () => {
     // #given
     globalThis.fetch = mock(
       async (url: string | URL | Request, options?: RequestInit) => {
-        const urlStr = url.toString()
+        const urlStr = normalizeUrl(url.toString())
+
+        if (urlStr === "http://localhost:8283/v1/models") {
+          return new Response(JSON.stringify([]), { status: 200 })
+        }
 
         if (
           urlStr === "http://localhost:8283/v1/agents" &&
@@ -288,18 +298,18 @@ describe("LettaAdapter with mocked fetch", () => {
 
         if (urlStr.includes("/archival-memory/search")) {
           return new Response(
-            JSON.stringify([
-              {
-                id: "p1",
-                text: "first result",
-                created_at: "2026-01-03T00:00:00Z",
-              },
-              {
-                id: "p2",
-                text: "second result",
-                created_at: "2026-01-03T00:00:00Z",
-              },
-            ]),
+            JSON.stringify({
+              results: [
+                {
+                  content: "first result",
+                  timestamp: "2026-01-03T00:00:00Z",
+                },
+                {
+                  content: "second result",
+                  timestamp: "2026-01-03T00:00:00Z",
+                },
+              ],
+            }),
             { status: 200 }
           )
         }
@@ -331,7 +341,11 @@ describe("LettaAdapter with mocked fetch", () => {
     // #given
     globalThis.fetch = mock(
       async (url: string | URL | Request, options?: RequestInit) => {
-        const urlStr = url.toString()
+        const urlStr = normalizeUrl(url.toString())
+
+        if (urlStr === "http://localhost:8283/v1/models") {
+          return new Response(JSON.stringify([]), { status: 200 })
+        }
 
         if (
           urlStr === "http://localhost:8283/v1/agents" &&
@@ -347,13 +361,15 @@ describe("LettaAdapter with mocked fetch", () => {
 
         if (urlStr.includes("/archival-memory/search")) {
           return new Response(
-            JSON.stringify([
-              { id: "p1", text: "a", created_at: "2026-01-03T00:00:00Z" },
-              { id: "p2", text: "b", created_at: "2026-01-03T00:00:00Z" },
-              { id: "p3", text: "c", created_at: "2026-01-03T00:00:00Z" },
-              { id: "p4", text: "d", created_at: "2026-01-03T00:00:00Z" },
-              { id: "p5", text: "e", created_at: "2026-01-03T00:00:00Z" },
-            ]),
+            JSON.stringify({
+              results: [
+                { content: "a", timestamp: "2026-01-03T00:00:00Z" },
+                { content: "b", timestamp: "2026-01-03T00:00:00Z" },
+                { content: "c", timestamp: "2026-01-03T00:00:00Z" },
+                { content: "d", timestamp: "2026-01-03T00:00:00Z" },
+                { content: "e", timestamp: "2026-01-03T00:00:00Z" },
+              ],
+            }),
             { status: 200 }
           )
         }
@@ -382,7 +398,11 @@ describe("LettaAdapter with mocked fetch", () => {
     // #given
     globalThis.fetch = mock(
       async (url: string | URL | Request, options?: RequestInit) => {
-        const urlStr = url.toString()
+        const urlStr = normalizeUrl(url.toString())
+
+        if (urlStr === "http://localhost:8283/v1/models") {
+          return new Response(JSON.stringify([]), { status: 200 })
+        }
 
         if (
           urlStr === "http://localhost:8283/v1/agents" &&
@@ -398,16 +418,14 @@ describe("LettaAdapter with mocked fetch", () => {
 
         if (urlStr.includes("/archival-memory/search")) {
           return new Response(
-            JSON.stringify([
-              { id: "p1", text: "high", created_at: "2026-01-03T00:00:00Z" },
-              {
-                id: "p2",
-                text: "medium-high",
-                created_at: "2026-01-03T00:00:00Z",
-              },
-              { id: "p3", text: "medium", created_at: "2026-01-03T00:00:00Z" },
-              { id: "p4", text: "low", created_at: "2026-01-03T00:00:00Z" },
-            ]),
+            JSON.stringify({
+              results: [
+                { content: "high", timestamp: "2026-01-03T00:00:00Z" },
+                { content: "medium-high", timestamp: "2026-01-03T00:00:00Z" },
+                { content: "medium", timestamp: "2026-01-03T00:00:00Z" },
+                { content: "low", timestamp: "2026-01-03T00:00:00Z" },
+              ],
+            }),
             { status: 200 }
           )
         }
@@ -629,6 +647,8 @@ describe("LettaAdapter with mocked fetch", () => {
 describe("LettaAdapter embedding model detection", () => {
   const originalFetch = globalThis.fetch
 
+  const normalizeUrl = (url: string): string => url.replace(/\/$/, "")
+
   beforeEach(() => {
     globalThis.fetch = originalFetch
   })
@@ -639,9 +659,9 @@ describe("LettaAdapter embedding model detection", () => {
 
     globalThis.fetch = mock(
       async (url: string | URL | Request, options?: RequestInit) => {
-        const urlStr = url.toString()
+        const urlStr = normalizeUrl(url.toString())
 
-        if (urlStr.includes("/v1/models")) {
+        if (urlStr === "http://localhost:8283/v1/models") {
           return new Response(
             JSON.stringify([
               {
@@ -667,7 +687,10 @@ describe("LettaAdapter embedding model detection", () => {
           )
         }
 
-        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+        if (
+          urlStr === "http://localhost:8283/v1/agents" &&
+          options?.method === "GET"
+        ) {
           return new Response(JSON.stringify([]), { status: 200 })
         }
 
@@ -683,7 +706,10 @@ describe("LettaAdapter embedding model detection", () => {
           )
         }
 
-        if (urlStr.endsWith("/v1/agents") && options?.method === "POST") {
+        if (
+          urlStr === "http://localhost:8283/v1/agents" &&
+          options?.method === "POST"
+        ) {
           const body = JSON.parse(options?.body as string)
           usedEmbeddingModel = body.embedding
           return new Response(
@@ -709,7 +735,7 @@ describe("LettaAdapter embedding model detection", () => {
     await adapter.add({ content: "test", layer: "user" })
 
     // #then
-    expect(usedEmbeddingModel).toBe("openai/text-embedding-3-small")
+    expect(usedEmbeddingModel).toBe("openai-proxy/text-embedding-3-small")
   })
 
   test("falls back to default when no proxy embedding found", async () => {
@@ -718,9 +744,9 @@ describe("LettaAdapter embedding model detection", () => {
 
     globalThis.fetch = mock(
       async (url: string | URL | Request, options?: RequestInit) => {
-        const urlStr = url.toString()
+        const urlStr = normalizeUrl(url.toString())
 
-        if (urlStr.includes("/v1/models")) {
+        if (urlStr === "http://localhost:8283/v1/models") {
           return new Response(
             JSON.stringify([
               {
@@ -733,7 +759,10 @@ describe("LettaAdapter embedding model detection", () => {
           )
         }
 
-        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+        if (
+          urlStr === "http://localhost:8283/v1/agents" &&
+          options?.method === "GET"
+        ) {
           return new Response(JSON.stringify([]), { status: 200 })
         }
 
@@ -749,7 +778,10 @@ describe("LettaAdapter embedding model detection", () => {
           )
         }
 
-        if (urlStr.endsWith("/v1/agents") && options?.method === "POST") {
+        if (
+          urlStr === "http://localhost:8283/v1/agents" &&
+          options?.method === "POST"
+        ) {
           const body = JSON.parse(options?.body as string)
           usedEmbeddingModel = body.embedding
           return new Response(
@@ -784,9 +816,16 @@ describe("LettaAdapter embedding model detection", () => {
 
     globalThis.fetch = mock(
       async (url: string | URL | Request, options?: RequestInit) => {
-        const urlStr = url.toString()
+        const urlStr = normalizeUrl(url.toString())
 
-        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+        if (urlStr === "http://localhost:8283/v1/models") {
+          return new Response(JSON.stringify([]), { status: 200 })
+        }
+
+        if (
+          urlStr === "http://localhost:8283/v1/agents" &&
+          options?.method === "GET"
+        ) {
           return new Response(JSON.stringify([]), { status: 200 })
         }
 
@@ -801,7 +840,10 @@ describe("LettaAdapter embedding model detection", () => {
           )
         }
 
-        if (urlStr.endsWith("/v1/agents") && options?.method === "POST") {
+        if (
+          urlStr === "http://localhost:8283/v1/agents" &&
+          options?.method === "POST"
+        ) {
           const body = JSON.parse(options?.body as string)
           usedEmbeddingModel = body.embedding
           return new Response(
@@ -837,9 +879,9 @@ describe("LettaAdapter embedding model detection", () => {
 
     globalThis.fetch = mock(
       async (url: string | URL | Request, options?: RequestInit) => {
-        const urlStr = url.toString()
+        const urlStr = normalizeUrl(url.toString())
 
-        if (urlStr.includes("/v1/models")) {
+        if (urlStr === "http://localhost:8283/v1/models") {
           return new Response(
             JSON.stringify([
               {
@@ -859,7 +901,10 @@ describe("LettaAdapter embedding model detection", () => {
           )
         }
 
-        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+        if (
+          urlStr === "http://localhost:8283/v1/agents" &&
+          options?.method === "GET"
+        ) {
           return new Response(JSON.stringify([]), { status: 200 })
         }
 
@@ -874,7 +919,10 @@ describe("LettaAdapter embedding model detection", () => {
           )
         }
 
-        if (urlStr.endsWith("/v1/agents") && options?.method === "POST") {
+        if (
+          urlStr === "http://localhost:8283/v1/agents" &&
+          options?.method === "POST"
+        ) {
           const body = JSON.parse(options?.body as string)
           usedEmbeddingModel = body.embedding
           return new Response(
@@ -901,7 +949,7 @@ describe("LettaAdapter embedding model detection", () => {
     await adapter.add({ content: "test", layer: "user" })
 
     // #then
-    expect(usedEmbeddingModel).toBe("openai/text-embedding-3-large")
+    expect(usedEmbeddingModel).toBe("openai-proxy/text-embedding-3-large")
   })
 
   test("recreates agent when using letta-free embedding and better model available", async () => {
@@ -912,9 +960,9 @@ describe("LettaAdapter embedding model detection", () => {
 
     globalThis.fetch = mock(
       async (url: string | URL | Request, options?: RequestInit) => {
-        const urlStr = url.toString()
+        const urlStr = normalizeUrl(url.toString())
 
-        if (urlStr.includes("/v1/models")) {
+        if (urlStr === "http://localhost:8283/v1/models") {
           return new Response(
             JSON.stringify([
               {
@@ -928,7 +976,10 @@ describe("LettaAdapter embedding model detection", () => {
           )
         }
 
-        if (urlStr.includes("/v1/agents") && options?.method === "GET") {
+        if (
+          urlStr === "http://localhost:8283/v1/agents" &&
+          options?.method === "GET"
+        ) {
           return new Response(
             JSON.stringify([
               {
@@ -944,7 +995,7 @@ describe("LettaAdapter embedding model detection", () => {
         }
 
         if (
-          urlStr.includes("/v1/agents/old-agent-123") &&
+          urlStr === "http://localhost:8283/v1/agents/old-agent-123" &&
           options?.method === "DELETE"
         ) {
           deleteAgentCalled = true
@@ -962,7 +1013,10 @@ describe("LettaAdapter embedding model detection", () => {
           )
         }
 
-        if (urlStr.endsWith("/v1/agents") && options?.method === "POST") {
+        if (
+          urlStr === "http://localhost:8283/v1/agents" &&
+          options?.method === "POST"
+        ) {
           createAgentCalls++
           const body = JSON.parse(options?.body as string)
           lastEmbeddingModel = body.embedding
@@ -991,7 +1045,7 @@ describe("LettaAdapter embedding model detection", () => {
     // #then
     expect(deleteAgentCalled).toBe(true)
     expect(createAgentCalls).toBe(1)
-    expect(lastEmbeddingModel).toBe("openai/text-embedding-3-small")
+    expect(lastEmbeddingModel).toBe("openai-proxy/text-embedding-3-small")
   })
 
   test("does not recreate agent when config embeddingModel is set", async () => {

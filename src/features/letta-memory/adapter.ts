@@ -17,7 +17,9 @@ const DEFAULT_ENDPOINT = "http://localhost:8283"
 const DEFAULT_AGENT_PREFIX = "opencode"
 const DEFAULT_LLM_MODEL = "letta/letta-free"
 const DEFAULT_EMBEDDING_MODEL = "letta/letta-free"
-const VALID_PROVIDERS = ["letta", "openai"]
+const VALID_PROVIDERS = ["letta", "openai", "openai-proxy"]
+const COPILOT_PROXY_ENDPOINT = "http://host.docker.internal:4141/v1"
+const COPILOT_PROXY_LOCAL = "http://localhost:4141/v1"
 
 interface LettaModel {
   handle: string
@@ -36,9 +38,87 @@ export class LettaAdapter {
   private resolvedEmbeddingModel: string | null = null
   private resolvedLlmModel: string | null = null
 
+  private providerInitPromise: Promise<void> | null = null
+
   constructor(config: LettaConfig) {
     this.config = config
     this.endpoint = config.endpoint ?? DEFAULT_ENDPOINT
+  }
+
+  /**
+   * Ensures the openai-proxy provider is registered in Letta when:
+   * 1. Models with openai-proxy/ prefix exist (from OPENAI_API_BASE env var)
+   * 2. No user-created openai-proxy provider exists
+   * 3. Copilot proxy is available locally
+   *
+   * This fixes the provider mismatch where Letta's built-in OpenAI provider
+   * creates models with openai-proxy/ handles but the provider is named "openai",
+   * causing agent creation to fail.
+   */
+  async ensureOpenAIProxyProvider(): Promise<void> {
+    if (this.providerInitPromise) {
+      return this.providerInitPromise
+    }
+
+    this.providerInitPromise = this.doEnsureOpenAIProxyProvider()
+    return this.providerInitPromise
+  }
+
+  private async doEnsureOpenAIProxyProvider(): Promise<void> {
+    try {
+      const models = await this.getModels()
+      const hasOpenAIProxyModels = models.some((m) => m.handle.startsWith("openai-proxy/"))
+      if (!hasOpenAIProxyModels) {
+        return
+      }
+
+      const providersResponse = await fetch(`${this.endpoint}/v1/providers/`, {
+        method: "GET",
+        redirect: "follow",
+        signal: AbortSignal.timeout(10000),
+      })
+
+      if (!providersResponse.ok) {
+        return
+      }
+
+      const providers = (await providersResponse.json()) as Array<{ name: string }>
+      const hasOpenAIProxyProvider = providers.some((p) => p.name === "openai-proxy")
+      if (hasOpenAIProxyProvider) {
+        return
+      }
+
+      const proxyAvailable = await this.isCopilotProxyAvailable()
+      if (!proxyAvailable) {
+        return
+      }
+
+      await fetch(`${this.endpoint}/v1/providers/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        redirect: "follow",
+        signal: AbortSignal.timeout(10000),
+        body: JSON.stringify({
+          name: "openai-proxy",
+          provider_type: "openai",
+          api_key: "dummy",
+          base_url: COPILOT_PROXY_ENDPOINT,
+        }),
+      })
+    } catch {
+    }
+  }
+
+  private async isCopilotProxyAvailable(): Promise<boolean> {
+    try {
+      const response = await fetch(`${COPILOT_PROXY_LOCAL}/models`, {
+        method: "GET",
+        signal: AbortSignal.timeout(5000),
+      })
+      return response.ok
+    } catch {
+      return false
+    }
   }
 
   private async getModels(): Promise<LettaModel[]> {
@@ -392,7 +472,11 @@ export class LettaAdapter {
         redirect: "follow",
         signal: AbortSignal.timeout(5000),
       })
-      return response.ok
+      if (response.ok) {
+        await this.ensureOpenAIProxyProvider()
+        return true
+      }
+      return false
     } catch {
       return false
     }
