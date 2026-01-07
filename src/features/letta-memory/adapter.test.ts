@@ -735,7 +735,7 @@ describe("LettaAdapter embedding model detection", () => {
     await adapter.add({ content: "test", layer: "user" })
 
     // #then
-    expect(usedEmbeddingModel).toBe("openai-proxy/text-embedding-3-small")
+    expect(usedEmbeddingModel).toBe("openai/text-embedding-3-small")
   })
 
   test("falls back to default when no proxy embedding found", async () => {
@@ -949,7 +949,7 @@ describe("LettaAdapter embedding model detection", () => {
     await adapter.add({ content: "test", layer: "user" })
 
     // #then
-    expect(usedEmbeddingModel).toBe("openai-proxy/text-embedding-3-large")
+    expect(usedEmbeddingModel).toBe("openai/text-embedding-3-large")
   })
 
   test("recreates agent when using letta-free embedding and better model available", async () => {
@@ -1045,7 +1045,7 @@ describe("LettaAdapter embedding model detection", () => {
     // #then
     expect(deleteAgentCalled).toBe(true)
     expect(createAgentCalls).toBe(1)
-    expect(lastEmbeddingModel).toBe("openai-proxy/text-embedding-3-small")
+    expect(lastEmbeddingModel).toBe("openai/text-embedding-3-small")
   })
 
   test("does not recreate agent when config embeddingModel is set", async () => {

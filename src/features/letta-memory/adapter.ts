@@ -18,8 +18,21 @@ const DEFAULT_AGENT_PREFIX = "opencode"
 const DEFAULT_LLM_MODEL = "letta/letta-free"
 const DEFAULT_EMBEDDING_MODEL = "letta/letta-free"
 const VALID_PROVIDERS = ["letta", "openai", "openai-proxy"]
+const LETTA_SUPPORTED_PROVIDERS = ["letta", "openai"]
 const COPILOT_PROXY_ENDPOINT = "http://host.docker.internal:4141/v1"
 const COPILOT_PROXY_LOCAL = "http://localhost:4141/v1"
+
+/**
+ * Normalizes a model handle to use a Letta-supported provider prefix.
+ * Converts "openai-proxy/model-name" to "openai/model-name" since Letta
+ * only accepts "letta" or "openai" as provider prefixes.
+ */
+function normalizeHandleForLetta(handle: string): string {
+  if (handle.startsWith("openai-proxy/")) {
+    return handle.replace("openai-proxy/", "openai/")
+  }
+  return handle
+}
 
 interface LettaModel {
   handle: string
@@ -221,7 +234,8 @@ export class LettaAdapter {
 
     const configModel = this.config.embeddingModel
     if (configModel) {
-      this.resolvedEmbeddingModel = await this.resolveModelHandle(configModel, true)
+      const resolved = await this.resolveModelHandle(configModel, true)
+      this.resolvedEmbeddingModel = normalizeHandleForLetta(resolved)
     } else {
       const models = await this.getModels()
       const hasValidProvider = (handle: string) => {
@@ -238,7 +252,8 @@ export class LettaAdapter {
       if (validEmbeddingModels.length > 0) {
         const preferredName = this.config.preferredEmbeddingModel ?? "text-embedding-3-small"
         const preferred = validEmbeddingModels.find((m) => m.name.includes(preferredName))
-        this.resolvedEmbeddingModel = preferred?.handle ?? validEmbeddingModels[0].handle
+        const handle = preferred?.handle ?? validEmbeddingModels[0].handle
+        this.resolvedEmbeddingModel = normalizeHandleForLetta(handle)
       } else {
         this.resolvedEmbeddingModel = DEFAULT_EMBEDDING_MODEL
       }
@@ -254,7 +269,8 @@ export class LettaAdapter {
 
     const configModel = this.config.llmModel
     if (configModel) {
-      this.resolvedLlmModel = await this.resolveModelHandle(configModel, false)
+      const resolved = await this.resolveModelHandle(configModel, false)
+      this.resolvedLlmModel = normalizeHandleForLetta(resolved)
     } else {
       this.resolvedLlmModel = DEFAULT_LLM_MODEL
     }
