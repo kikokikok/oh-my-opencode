@@ -109,7 +109,14 @@ export class LettaAdapter {
     })
 
     const data = await response.json()
+    // Debug: Log raw API response
+    console.log("[LettaAdapter.add] Raw API response:", JSON.stringify(data, null, 2))
+    
     const passage = (Array.isArray(data) ? data[0] : data) as LettaPassage
+    // Debug: Log extracted passage
+    console.log("[LettaAdapter.add] Extracted passage:", JSON.stringify(passage, null, 2))
+    console.log("[LettaAdapter.add] passage.id:", passage?.id)
+    
     return this.passageToMemory(passage, input.layer, agent.id)
   }
 
@@ -305,8 +312,11 @@ export class LettaAdapter {
   }
 
   private async getOrCreateAgent(layer: MemoryLayer): Promise<LettaAgent> {
+    console.log(`[LettaAdapter.getOrCreateAgent] Looking for agent for layer: ${layer}`)
+    
     const existing = await this.getAgent(layer)
     if (existing) {
+      console.log(`[LettaAdapter.getOrCreateAgent] Found existing agent: ${existing.id} (${existing.name})`)
       const needsUpdate = await this.agentNeedsEmbeddingUpdate(existing)
       if (needsUpdate) {
         return this.recreateAgentWithCorrectEmbedding(existing, layer)
@@ -314,8 +324,11 @@ export class LettaAdapter {
       return existing
     }
 
+    console.log(`[LettaAdapter.getOrCreateAgent] No existing agent, creating new one for layer: ${layer}`)
     const embeddingModel = await this.detectEmbeddingModel()
     const agentName = this.getAgentName(layer)
+    console.log(`[LettaAdapter.getOrCreateAgent] Creating agent with name: ${agentName}, embedding: ${embeddingModel}`)
+    
     const response = await this.request("/v1/agents", {
       method: "POST",
       body: JSON.stringify({
@@ -335,6 +348,7 @@ export class LettaAdapter {
     })
 
     const agent = (await response.json()) as LettaAgent
+    console.log(`[LettaAdapter.getOrCreateAgent] Created agent: ${agent.id} (${agent.name})`)
     this.agentCache.set(layer, agent)
     return agent
   }
@@ -429,6 +443,11 @@ export class LettaAdapter {
       headers["Authorization"] = `Bearer ${this.config.apiKey}`
     }
 
+    console.log(`[LettaAdapter.request] ${options.method} ${this.endpoint}${path}`)
+    if (options.body) {
+      console.log(`[LettaAdapter.request] Body: ${options.body.slice(0, 500)}`)
+    }
+
     const response = await fetch(`${this.endpoint}${path}`, {
       method: options.method,
       headers,
@@ -438,6 +457,7 @@ export class LettaAdapter {
 
     if (!response.ok) {
       const text = await response.text().catch(() => "")
+      console.log(`[LettaAdapter.request] Error ${response.status}: ${text}`)
       throw new Error(`Letta API error: ${response.status} ${response.statusText} - ${text}`)
     }
 
@@ -483,6 +503,10 @@ export class LettaAdapter {
     layer: MemoryLayer,
     agentId: string
   ): Memory {
+    console.log("[LettaAdapter.passageToMemory] Input passage keys:", Object.keys(passage || {}))
+    console.log("[LettaAdapter.passageToMemory] passage.id:", passage?.id)
+    console.log("[LettaAdapter.passageToMemory] passage.text:", passage?.text?.slice(0, 50))
+    
     return {
       id: passage.id,
       content: passage.text,
