@@ -17,6 +17,7 @@ const DEFAULT_ENDPOINT = "http://localhost:8283"
 const DEFAULT_AGENT_PREFIX = "opencode"
 const DEFAULT_LLM_MODEL = "letta/letta-free"
 const DEFAULT_EMBEDDING_MODEL = "letta/letta-free"
+const VALID_PROVIDERS = ["letta", "openai"]
 
 interface LettaModel {
   handle: string
@@ -30,29 +31,26 @@ export class LettaAdapter {
   private config: LettaConfig
   private endpoint: string
   private agentCache: Map<string, LettaAgent> = new Map()
-  private detectedEmbeddingModel: string | null = null
-  private modelDetectionPromise: Promise<void> | null = null
+  private modelCache: LettaModel[] | null = null
+  private modelCachePromise: Promise<LettaModel[]> | null = null
+  private resolvedEmbeddingModel: string | null = null
+  private resolvedLlmModel: string | null = null
 
   constructor(config: LettaConfig) {
     this.config = config
     this.endpoint = config.endpoint ?? DEFAULT_ENDPOINT
   }
 
-  private async detectEmbeddingModel(): Promise<string> {
-    if (this.config.embeddingModel) {
-      return this.normalizeModelHandle(this.config.embeddingModel)
+  private async getModels(): Promise<LettaModel[]> {
+    if (this.modelCache) {
+      return this.modelCache
     }
 
-    if (this.detectedEmbeddingModel) {
-      return this.detectedEmbeddingModel
+    if (this.modelCachePromise) {
+      return this.modelCachePromise
     }
 
-    if (this.modelDetectionPromise) {
-      await this.modelDetectionPromise
-      return this.detectedEmbeddingModel ?? DEFAULT_EMBEDDING_MODEL
-    }
-
-    this.modelDetectionPromise = (async () => {
+    this.modelCachePromise = (async () => {
       try {
         const response = await fetch(`${this.endpoint}/v1/models`, {
           method: "GET",
@@ -61,38 +59,127 @@ export class LettaAdapter {
         })
 
         if (!response.ok) {
-          return
+          return []
         }
 
         const models = (await response.json()) as LettaModel[]
-
-        const proxyEmbeddingModels = models.filter(
-          (m) =>
-            m.name.includes("embedding") &&
-            m.model_endpoint.includes("host.docker.internal") &&
-            m.provider_name === "openai"
-        )
-
-        if (proxyEmbeddingModels.length > 0) {
-          const preferredName = this.config.preferredEmbeddingModel ?? "text-embedding-3-small"
-          const preferred = proxyEmbeddingModels.find((m) => m.name.includes(preferredName))
-          const model = preferred ?? proxyEmbeddingModels[0]
-          this.detectedEmbeddingModel = model.handle
-        }
+        this.modelCache = models
+        return models
       } catch {
-        // Fall back to default
+        return []
       }
     })()
 
-    await this.modelDetectionPromise
-    return this.detectedEmbeddingModel ?? DEFAULT_EMBEDDING_MODEL
+    return this.modelCachePromise
   }
 
-  private normalizeModelHandle(model: string): string {
-    if (model.startsWith("openai/") && !model.startsWith("openai-proxy/")) {
-      return model.replace("openai/", "openai-proxy/")
+  /**
+   * Resolves user model name to Letta handle. Letta requires exact handle matches
+   * AND valid provider prefix (letta/, openai/). Models with other prefixes like
+   * openai-proxy/ will fail agent creation even if registered in the model list.
+   */
+  private async resolveModelHandle(
+    requestedModel: string,
+    isEmbedding: boolean = false
+  ): Promise<string> {
+    const models = await this.getModels()
+    if (models.length === 0) {
+      return requestedModel
     }
-    return model
+
+    const hasValidProvider = (handle: string) => {
+      const provider = handle.split("/")[0]
+      return VALID_PROVIDERS.includes(provider)
+    }
+
+    const exactMatch = models.find((m) => m.handle === requestedModel && hasValidProvider(m.handle))
+    if (exactMatch) {
+      return exactMatch.handle
+    }
+
+    const requestedName = requestedModel.includes("/")
+      ? requestedModel.split("/").pop()!
+      : requestedModel
+
+    const candidates = models.filter((m) => {
+      if (!hasValidProvider(m.handle)) {
+        return false
+      }
+      if (isEmbedding && !m.name.includes("embedding")) {
+        return false
+      }
+      return m.name.includes(requestedName) || m.handle.includes(requestedName)
+    })
+
+    if (candidates.length > 0) {
+      const proxyModel = candidates.find(
+        (m) => m.model_endpoint?.includes("host.docker.internal")
+      )
+      return proxyModel?.handle ?? candidates[0].handle
+    }
+
+    if (isEmbedding) {
+      const validEmbeddingModels = models.filter(
+        (m) =>
+          m.name.includes("embedding") &&
+          hasValidProvider(m.handle)
+      )
+      if (validEmbeddingModels.length > 0) {
+        const preferredName = this.config.preferredEmbeddingModel ?? "text-embedding-3-small"
+        const preferred = validEmbeddingModels.find((m) => m.name.includes(preferredName))
+        return preferred?.handle ?? validEmbeddingModels[0].handle
+      }
+    }
+
+    return isEmbedding ? DEFAULT_EMBEDDING_MODEL : DEFAULT_LLM_MODEL
+  }
+
+  private async getEmbeddingModel(): Promise<string> {
+    if (this.resolvedEmbeddingModel) {
+      return this.resolvedEmbeddingModel
+    }
+
+    const configModel = this.config.embeddingModel
+    if (configModel) {
+      this.resolvedEmbeddingModel = await this.resolveModelHandle(configModel, true)
+    } else {
+      const models = await this.getModels()
+      const hasValidProvider = (handle: string) => {
+        const provider = handle.split("/")[0]
+        return VALID_PROVIDERS.includes(provider)
+      }
+      
+      const validEmbeddingModels = models.filter(
+        (m) =>
+          m.name.includes("embedding") &&
+          hasValidProvider(m.handle)
+      )
+
+      if (validEmbeddingModels.length > 0) {
+        const preferredName = this.config.preferredEmbeddingModel ?? "text-embedding-3-small"
+        const preferred = validEmbeddingModels.find((m) => m.name.includes(preferredName))
+        this.resolvedEmbeddingModel = preferred?.handle ?? validEmbeddingModels[0].handle
+      } else {
+        this.resolvedEmbeddingModel = DEFAULT_EMBEDDING_MODEL
+      }
+    }
+
+    return this.resolvedEmbeddingModel
+  }
+
+  private async getLlmModel(): Promise<string> {
+    if (this.resolvedLlmModel) {
+      return this.resolvedLlmModel
+    }
+
+    const configModel = this.config.llmModel
+    if (configModel) {
+      this.resolvedLlmModel = await this.resolveModelHandle(configModel, false)
+    } else {
+      this.resolvedLlmModel = DEFAULT_LLM_MODEL
+    }
+
+    return this.resolvedLlmModel
   }
 
   async add(input: AddMemoryInput): Promise<Memory> {
@@ -321,8 +408,8 @@ export class LettaAdapter {
       return existing
     }
 
-    const embeddingModel = await this.detectEmbeddingModel()
-    const llmModel = this.normalizeModelHandle(this.config.llmModel ?? DEFAULT_LLM_MODEL)
+    const embeddingModel = await this.getEmbeddingModel()
+    const llmModel = await this.getLlmModel()
     const agentName = this.getAgentName(layer)
     
     const response = await this.request("/v1/agents", {
@@ -357,7 +444,7 @@ export class LettaAdapter {
     if (!embeddingHandle) return false
 
     if (embeddingHandle === "letta/letta-free") {
-      const detected = await this.detectEmbeddingModel()
+      const detected = await this.getEmbeddingModel()
       return detected !== "letta/letta-free"
     }
 
@@ -372,8 +459,8 @@ export class LettaAdapter {
 
     this.agentCache.delete(layer)
 
-    const embeddingModel = await this.detectEmbeddingModel()
-    const llmModel = this.normalizeModelHandle(this.config.llmModel ?? DEFAULT_LLM_MODEL)
+    const embeddingModel = await this.getEmbeddingModel()
+    const llmModel = await this.getLlmModel()
     const agentName = this.getAgentName(layer)
     const response = await this.request("/v1/agents", {
       method: "POST",
