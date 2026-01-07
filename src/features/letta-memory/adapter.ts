@@ -3,6 +3,7 @@ import type {
   LettaAgent,
   LettaBlock,
   LettaPassage,
+  LettaSearchResponse,
   Memory,
   MemorySearchResult,
   AddMemoryInput,
@@ -107,7 +108,8 @@ export class LettaAdapter {
       }),
     })
 
-    const passage = (await response.json()) as LettaPassage
+    const data = await response.json()
+    const passage = (Array.isArray(data) ? data[0] : data) as LettaPassage
     return this.passageToMemory(passage, input.layer, agent.id)
   }
 
@@ -137,9 +139,18 @@ export class LettaAdapter {
           { method: "GET" }
         )
 
-        const data = (await response.json()) as LettaPassage[]
-        const layerResults = data.map((passage, index) => ({
-          memory: this.passageToMemory(passage, layer, agent.id),
+        const data = (await response.json()) as LettaSearchResponse
+        const searchResults = data.results ?? []
+        const layerResults = searchResults.map((item, index) => ({
+          memory: {
+            id: `search-${agent.id}-${item.timestamp}-${index}`,
+            content: item.content,
+            layer,
+            metadata: item.tags ? { tags: item.tags } : undefined,
+            createdAt: item.timestamp,
+            source: "passage" as const,
+            agentId: agent.id,
+          },
           score: 1 - index * 0.05,
         }))
         results.push(...layerResults)

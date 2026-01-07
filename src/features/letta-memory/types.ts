@@ -175,9 +175,17 @@ export interface LettaApiResponse<T> {
   message?: string
 }
 
+/** Letta search result item (different from passage) */
+export interface LettaSearchResultItem {
+  timestamp: string
+  content: string
+  tags?: string[]
+}
+
+/** Letta search response */
 export interface LettaSearchResponse {
-  passages: LettaPassage[]
-  total?: number
+  results: LettaSearchResultItem[]
+  count: number
 }
 
 export interface LettaAgentListResponse {
